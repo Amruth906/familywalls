@@ -1,140 +1,95 @@
 # 🏠 FamilyHub
 
-A free FamilyWall-style app for your family — **to-dos, shared lists, calendar/dates**, all synced in real time between everyone's phones.
+A free FamilyWall-style app for your family — **Google sign-in, to-dos, shared lists, calendar/dates**, all synced in real time on everyone's phones.
 
-Built with **React + Vite + Firebase (free tier)** and ready to deploy on **Netlify**.
+Built with **React + Vite + Firebase (free tier)** and deployed on **Netlify**.
 
 ---
 
 ## ✨ Features
 
-| Feature | What it does |
-|---|---|
-| 🏠 Home | Greeting, your tasks due today, upcoming dates |
-| ✅ To-Dos | Add tasks, assign to family members, due dates, filters |
-| 🛒 Lists | Multiple lists (groceries, packing…) with check-off items |
-| 📅 Calendar | Month view, events per day, "coming up" list |
-| 👨‍👩‍👧‍👦 Family | Invite code, member profiles with colors |
-| ⚡ Real-time | Everyone sees changes instantly (Firebase Firestore) |
-
-Everything updates live on all devices — like FamilyWall, but **free**.
+- 🔐 **Login with Google** — each family member has their own secure account
+- 🧾 **Your own family code** — you choose it when you create your family
+- ⚡ **Stay logged in** — open the app and you're straight into your family wall
+- ✅ **To-Dos** — assign to family members, due dates, overdue highlights
+- 🛒 **Lists** — groceries, packing, wishlists with check-off items
+- 📅 **Calendar** — month view, events with time & person colors
+- 👨‍👩‍👧‍👦 **Family** — invite code/link, Google avatars, multiple families supported
 
 ---
 
-## 🚀 Setup Guide (step by step)
+## 🚀 Setup Guide
 
-### Part 1 — Create your Firebase backend (5 minutes, free)
+### Part 1 — Firebase (one time, ~10 minutes, free)
 
-1. Go to <https://console.firebase.google.com> and sign in with Google.
-2. Click **Add project** → name it anything (e.g. `my-family-hub`) → **Create**.
-3. Inside the project, click the **web icon `</>`** to register a web app.
-4. Firebase shows you a `firebaseConfig` object that looks like:
-   ```js
-   const firebaseConfig = {
-     apiKey: "AIzaSy...",
-     authDomain: "my-family-hub.firebaseapp.com",
-     projectId: "my-family-hub",
-     storageBucket: "my-family-hub.appspot.com",
-     messagingSenderId: "1234567890",
-     appId: "1:12345:web:abc123"
-   };
-   ```
-5. Open **`src/firebase.js`** in this project and replace the placeholder values with yours.
-6. In Firebase console sidebar: **Build → Firestore Database → Create database**
-   → choose **Start in production mode** → pick a location → **Enable**.
-7. Open the **Rules** tab of Firestore and paste this, then click **Publish**:
-   ```
-   rules_version = '2';
-   service cloud.firestore {
-     match /databases/{database}/documents {
-       match /families/{familyCode}/{document=**} {
-         allow read, write: if request.auth == null;
-       }
-     }
-   }
-   ```
+Your config is already pasted into `src/firebase.js`. Still needed in the Firebase console:
 
-> 💡 The 6-letter family code works like a shared password — share it only
-> with your family. The free Spark plan is plenty for a whole family.
+1. **Enable Google sign-in**
+   Firebase console → **Build → Authentication → Get started → Sign-in method** tab
+   → **Add new provider → Google → Enable → Save**
+2. **Authorize your website domain**
+   **Authentication → Settings → Authorized domains → Add domain**
+   → add your Netlify domain, e.g. `familywalls.netlify.app`
+   (localhost is already allowed for testing)
+3. **Create the database**
+   **Build → Firestore Database → Create database → Start in production mode** → pick a location → **Enable**
+4. **Publish security rules**
+   In Firestore → **Rules** tab → paste the contents of [`firestore.rules`](firestore.rules) → **Publish**
 
-### Part 2 — Run it on your computer (optional)
+### Part 2 — Run locally (optional)
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:5173, click **Create a new family**, done.
-You'll get an invite code to enter on other devices.
+Open http://localhost:5173 → **Continue with Google** → create your family with a custom code.
 
-### Part 3 — Put it on GitHub
+### Part 3 — GitHub
 
 ```bash
 git init
 git add .
-git commit -m "FamilyHub app"
-```
-
-Then create a new repo at <https://github.com/new> (name it e.g. `familyhub`),
-and push:
-
-```bash
-git remote add origin https://github.com/YOUR-USERNAME/familyhub.git
+git commit -m "FamilyHub"
+git remote add origin https://github.com/YOUR-USERNAME/familywalls.git
 git branch -M main
 git push -u origin main
 ```
 
-### Part 4 — Deploy to Netlify (free)
+### Part 4 — Netlify (free)
 
-1. Go to <https://app.netlify.com> and sign up with GitHub.
-2. Click **Add new site → Import an existing project → GitHub**.
-3. Pick your `familyhub` repo.
-4. Netlify auto-detects Vite (build `npm run build`, publish `dist`).
-   These are also pinned in `netlify.toml`, so just click **Deploy**.
-5. Wait ~1 minute → you get a free URL like `https://your-site.netlify.app`.
+1. https://app.netlify.com → **Add new site → Import an existing project → GitHub**
+2. Pick your repo → **Deploy** (build settings come from `netlify.toml`)
+3. Copy your site URL (e.g. `https://familywalls.netlify.app`) → add it to Firebase authorized domains (Part 1, step 2)
 
-> 🔁 Every time you `git push`, Netlify redeploys automatically.
-
-### Part 5 — Add it to phones like an app
-
-Open your Netlify link on each phone → browser menu → **"Add to Home Screen"**.
-It behaves like a native app. Join with the same family code everywhere.
+Every `git push` auto-redeploys. On each phone: open the URL → **Add to Home Screen**.
 
 ---
 
-## 📁 Project structure
+## 🔑 How login & family codes work
+
+1. First open → **Continue with Google** (no passwords, managed by Firebase)
+2. No family yet → **Create** (pick any code you like, e.g. `GADALA-7`) or **Join** with the family code
+3. Your login is remembered on that device forever — next time it opens straight to Home
+4. Family members join by entering your code — the code is just an invite token, all data access still requires a signed-in Google account
+
+## 🗄 Data model (Firestore)
 
 ```
-familyhub/
-├── index.html
-├── netlify.toml          # Netlify build settings + SPA redirects
-├── package.json
-├── src/
-│   ├── main.jsx
-│   ├── App.jsx           # layout, tabs, setup screen
-│   ├── firebase.js       # ← paste your Firebase config here
-│   ├── store.jsx         # session, family members context
-│   ├── useData.js        # real-time collection hook
-│   ├── styles.css
-│   └── pages/
-│       ├── JoinScreen.jsx   # create/join family
-│       ├── Home.jsx
-│       ├── Todos.jsx
-│       ├── ListsPage.jsx
-│       ├── CalendarPage.jsx
-│       └── Members.jsx      # invite code, profiles
-└── firestore.rules
+users/{uid}                          → name, email, photoURL, families: { CODE: true }
+families/{CODE}                      → name, code, createdBy
+families/{CODE}/members/{uid}        → name, photoURL, color, joinedAt
+families/{CODE}/todos/{id}           → text, assigneeId, dueDate, done
+families/{CODE}/lists/{id}           → name, emoji
+families/{CODE}/lists/{id}/items/{id}→ text, checked
+families/{CODE}/events/{id}          → title, date, time, memberId
 ```
 
 ## ❓ FAQ
 
-**Is Firebase really free?** Yes — the Spark plan is free forever. A family app
-uses a tiny fraction of its limits.
+**Is Firebase free?** Yes — the Spark plan is free forever, plenty for a family.
 
-**Is my data safe?** It lives in your own Firebase project. Access requires your
-family code; only share it with family. Don't store sensitive documents here.
+**Changed the old code-based app to this version?** Old test data (created before
+Google login) isn't linked to your account. Just create a fresh family — takes 10 seconds.
 
-**Can multiple families use one deployment?** Yes! Each family gets its own code,
-and data is completely separated.
-
-**Change the app name?** Edit `<title>` in `index.html` and the name in `App.jsx`.
+**Multiple families?** Yes — create/join as many as you like and switch in the sidebar.

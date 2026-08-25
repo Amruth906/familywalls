@@ -1,17 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-
-// ============================================================
-// SETUP (one time only):
-// 1. Go to https://console.firebase.google.com
-// 2. Click "Add project" -> give it any name -> Create
-// 3. In the project, click the web icon </> -> register an app
-// 4. Copy the firebaseConfig object it shows you and PASTE it
-//    below, replacing this placeholder.
-// 5. In Firebase console go to: Build > Firestore Database >
-//    Create database > Create database.
-// Full step-by-step guide is in README.md
-// ============================================================
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDwORr8j6cU3XeWMMYB2xiUCTRLhdSI3Qo",
@@ -26,9 +15,9 @@ export const isConfigured = !Object.values(firebaseConfig).some((v) =>
   String(v).startsWith("PASTE_")
 );
 
-let db = null;
-if (isConfigured) {
-  db = getFirestore(initializeApp(firebaseConfig));
-}
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
 
-export { db };
+setPersistence(auth, browserLocalPersistence).catch(() => {});

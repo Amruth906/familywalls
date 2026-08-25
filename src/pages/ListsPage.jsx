@@ -1,28 +1,28 @@
 import React, { useEffect, useState } from "react";
 import { doc, addDoc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore";
-import { useFamily, famCol } from "../store.jsx";
+import { useApp, famCol } from "../store.jsx";
 import { db } from "../firebase.js";
 import { useCollection } from "../useData.js";
+import { IconPlus, IconX, IconTrash } from "../components/Icons.jsx";
 
 const EMOJIS = ["🛒", "🧾", "🎂", "🎁", "🧳", "🏡", "💡", "📦"];
 
 export default function ListsPage() {
-  const { session, me, members } = useFamily();
-  const { docs: lists, loading } = useCollection(session.code, "lists");
+  const { user, activeCode } = useApp();
+  const { docs: lists, loading } = useCollection(activeCode, "lists");
   const [selectedId, setSelectedId] = useState(null);
   const [newName, setNewName] = useState("");
   const [emoji, setEmoji] = useState(EMOJIS[0]);
 
   const selected = lists.find((l) => l.id === selectedId) || lists[0] || null;
-  const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
 
   async function createList(e) {
     e.preventDefault();
     if (!newName.trim()) return;
-    const ref = await addDoc(famCol(session.code, "lists"), {
+    const ref = await addDoc(famCol(activeCode, "lists"), {
       name: newName.trim(),
       emoji,
-      createdBy: me?.id || null,
+      createdBy: user.uid,
       createdAt: Date.now(),
     });
     setNewName("");
@@ -31,15 +31,15 @@ export default function ListsPage() {
 
   async function deleteList(id) {
     if (!confirm("Delete this whole list?")) return;
-    await deleteDoc(doc(db, "families", session.code, "lists", id));
+    await deleteDoc(doc(db, "families", activeCode, "lists", id));
     setSelectedId(null);
   }
 
   return (
     <div className="page">
-      <h2>Lists</h2>
+      <h2 className="page-title">Lists</h2>
       <div className="split">
-        <aside className="side card">
+        <aside className="panel side-panel">
           <form className="new-list" onSubmit={createList}>
             <div className="emoji-row">
               {EMOJIS.map((e) => (
@@ -53,8 +53,14 @@ export default function ListsPage() {
                 </button>
               ))}
             </div>
-            <input placeholder="New list name…" value={newName} onChange={(e) => setNewName(e.target.value)} />
-            <button className="btn primary">Create</button>
+            <input
+              placeholder="New list name…"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <button className="btn primary">
+              <IconPlus size={16} /> Create
+            </button>
           </form>
 
           <ul className="mini-nav">
@@ -69,15 +75,16 @@ export default function ListsPage() {
                 </button>
               </li>
             ))}
+            {!loading && !lists.length && <p className="empty">No lists yet.</p>}
           </ul>
         </aside>
 
         {selected ? (
-          <ListDetail code={session.code} list={selected} memberById={memberById} onDelete={deleteList} />
+          <ListDetail code={activeCode} list={selected} onDelete={deleteList} />
         ) : (
           !loading && (
-            <div className="card empty-card">
-              <p>No lists yet. Create one on the left 👈</p>
+            <div className="panel empty-panel">
+              <p>Create your first list — groceries, packing, wishlists…</p>
             </div>
           )
         )}
@@ -86,9 +93,16 @@ export default function ListsPage() {
   );
 }
 
-function ListDetail({ code, list, memberById, onDelete }) {
+function ListDetail({ code, list, onDelete }) {
   const [text, setText] = useState("");
-  const { docs: items } = useSubItems(code, list.id);
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(famCol(code, `lists/${list.id}/items`), (snap) =>
+      setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+    );
+    return unsub;
+  }, [code, list.id]);
 
   function itemDoc(id) {
     return doc(db, "families", code, "lists", list.id, "items", id);
@@ -100,7 +114,6 @@ function ListDetail({ code, list, memberById, onDelete }) {
     await addDoc(famCol(code, `lists/${list.id}/items`), {
       text: text.trim(),
       checked: false,
-      addedBy: null,
       createdAt: Date.now(),
     });
     setText("");
@@ -110,13 +123,13 @@ function ListDetail({ code, list, memberById, onDelete }) {
   const checked = items.filter((i) => i.checked);
 
   return (
-    <section className="card grow-card">
-      <header className="detail-head">
+    <section className="panel">
+      <header className="panel-head">
         <h3>
           {list.emoji} {list.name}
         </h3>
-        <button className="x big-x" title="Delete list" onClick={() => onDelete(list.id)}>
-          🗑
+        <button className="icon-btn danger" title="Delete list" onClick={() => onDelete(list.id)}>
+          <IconTrash size={16} />
         </button>
       </header>
 
@@ -128,39 +141,38 @@ function ListDetail({ code, list, memberById, onDelete }) {
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
-        <button className="btn primary">Add</button>
+        <button className="btn primary">
+          <IconPlus size={16} />
+        </button>
       </form>
 
-      <ul className="todo-list">
+      <ul className="row-list">
         {open.map((i) => (
-          <li key={i.id}>
-            <input
-              type="checkbox"
-              onChange={() => updateDoc(itemDoc(i.id), { checked: true })}
-            />
-            <span className="todo-text">{i.text}</span>
-            <button className="x" onClick={() => deleteDoc(itemDoc(i.id))}>
-              ✕
+          <li key={i.id} className="check-row">
+            <input type="checkbox" onChange={() => updateDoc(itemDoc(i.id), { checked: true })} />
+            <span className="row-title">{i.text}</span>
+            <button className="icon-btn danger" onClick={() => deleteDoc(itemDoc(i.id))}>
+              <IconX size={16} />
             </button>
           </li>
         ))}
-        {!open.length && !checked.length && <p className="muted">Nothing here yet.</p>}
+        {!open.length && !checked.length && <p className="empty">Nothing here yet.</p>}
       </ul>
 
       {checked.length > 0 && (
         <>
-          <h4 className="muted-head">Checked off ({checked.length})</h4>
-          <ul className="todo-list dim">
+          <h4 className="muted-head">Checked off · {checked.length}</h4>
+          <ul className="row-list dim">
             {checked.map((i) => (
-              <li key={i.id} className="is-done">
+              <li key={i.id} className="check-row is-done">
                 <input
                   type="checkbox"
                   checked
                   onChange={() => updateDoc(itemDoc(i.id), { checked: false })}
                 />
-                <span className="todo-text">{i.text}</span>
-                <button className="x" onClick={() => deleteDoc(itemDoc(i.id))}>
-                  ✕
+                <span className="row-title">{i.text}</span>
+                <button className="icon-btn danger" onClick={() => deleteDoc(itemDoc(i.id))}>
+                  <IconX size={16} />
                 </button>
               </li>
             ))}
@@ -169,16 +181,4 @@ function ListDetail({ code, list, memberById, onDelete }) {
       )}
     </section>
   );
-}
-
-function useSubItems(code, listId) {
-  const [docs, setDocs] = useState([]);
-  useEffect(() => {
-    if (!listId) return;
-    const unsub = onSnapshot(famCol(code, `lists/${listId}/items`), (snap) =>
-      setDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-    return unsub;
-  }, [code, listId]);
-  return { docs };
 }

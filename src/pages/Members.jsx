@@ -1,109 +1,91 @@
 import React, { useState } from "react";
-import { doc, addDoc, deleteDoc } from "firebase/firestore";
-import { useFamily, famCol, MEMBER_COLORS } from "../store.jsx";
-import { db } from "../firebase.js";
-import { useCollection } from "../useData.js";
+import { useApp } from "../store.jsx";
+import Avatar from "../components/Avatar.jsx";
+import { IconCopy, IconLink, IconCheck, IconLogout, IconUsers } from "../components/Icons.jsx";
 
 export default function Members() {
-  const { session, me, familyName, switchMember } = useFamily();
-  const { docs: members } = useCollection(session.code, "members");
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(MEMBER_COLORS[0]);
-  const [copied, setCopied] = useState(false);
+  const { user, activeCode, members, me, familyName, leaveFamily } = useApp();
+  const [copied, setCopied] = useState("");
+  const [leaving, setLeaving] = useState(false);
 
-  async function addMember(e) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    await addDoc(famCol(session.code, "members"), {
-      name: name.trim(),
-      color,
-      createdAt: Date.now(),
-    });
-    setName("");
-  }
-
-  async function copyInvite() {
-    const link = `${location.origin}${location.pathname}#${session.code}`;
+  async function copy(text, tag) {
     try {
-      await navigator.clipboard.writeText(link);
-    } catch {
-      /* clipboard may be blocked; code copy still works in header */
-    }
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(text);
+    } catch {}
+    setCopied(tag);
+    setTimeout(() => setCopied(""), 1800);
   }
 
   return (
     <div className="page narrow">
-      <h2>Family</h2>
+      <h2 className="page-title">Family</h2>
 
-      <div className="card invite-card">
-        <h3>Invite your family 💌</h3>
+      <div className="panel invite-panel">
+        <div className="invite-badge">
+          <IconLink size={18} />
+        </div>
+        <h3>Invite your family</h3>
         <p className="muted">
-          Share this code — they tap <b>"Join with a family code"</b> on their phone and enter it:
+          They open the app, sign in with Google, tap <b>Join</b> and enter this code:
         </p>
-        <div className="code-display">{session.code}</div>
-        <button className="btn primary" onClick={copyInvite}>
-          {copied ? "Copied! ✓" : "Copy invite link"}
-        </button>
+        <div className="code-display">{activeCode}</div>
+        <div className="invite-actions">
+          <button className="btn primary" onClick={() => copy(activeCode, "code")}>
+            {copied === "code" ? <IconCheck size={16} /> : <IconCopy size={16} />}
+            {copied === "code" ? "Copied!" : "Copy code"}
+          </button>
+          <button
+            className="btn"
+            onClick={() => copy(`${location.origin}${location.pathname}#${activeCode}`, "link")}
+          >
+            {copied === "link" ? <IconCheck size={16} /> : <IconLink size={16} />}
+            {copied === "link" ? "Copied!" : "Copy invite link"}
+          </button>
+        </div>
       </div>
 
-      <section className="card list-card">
-        <h3>{familyName} ({members.length})</h3>
-        <ul className="todo-list">
+      <section className="panel">
+        <header className="panel-head">
+          <h3>
+            <IconUsers size={18} /> {familyName || activeCode}
+          </h3>
+          <span className="count-pill">{members.length}</span>
+        </header>
+        <ul className="row-list">
           {members.map((m) => (
-            <li key={m.id} className={m.id === me?.id ? "me-row" : ""}>
-              <span className="avatar" style={{ background: m.color }}>
-                {m.name.slice(0, 1).toUpperCase()}
-              </span>
-              <div className="todo-body">
-                <span className="todo-text">
-                  {m.name} {m.id === me?.id && <span className="you-tag">you</span>}
+            <li key={m.id}>
+              <Avatar src={m.photoURL} name={m.name} color={m.color} size={38} />
+              <div className="row-body">
+                <span className="row-title">
+                  {m.name}
+                  {m.id === user.uid && <span className="you-tag">you</span>}
                 </span>
+                {m.id === me?.id && <span className="row-sub">Signed in on this device</span>}
               </div>
-              {m.id !== me?.id && (
-                <>
-                  <button
-                    className="btn tiny"
-                    title="Switch to this person on this device"
-                    onClick={() => switchMember(m.id)}
-                  >
-                    Switch
-                  </button>
-                  <button
-                    className="x"
-                    title="Remove member"
-                    onClick={async () => {
-                      if (confirm(`Remove ${m.name}?`))
-                        await deleteDoc(doc(db, "families", session.code, "members", m.id));
-                    }}
-                  >
-                    ✕
-                  </button>
-                </>
-              )}
             </li>
           ))}
         </ul>
       </section>
 
-      <form className="card add-member" onSubmit={addMember}>
-        <h3>Add a family member</h3>
-        <input placeholder="Name…" value={name} onChange={(e) => setName(e.target.value)} />
-        <div className="swatches">
-          {MEMBER_COLORS.map((c) => (
-            <button
-              type="button"
-              key={c}
-              className={"swatch" + (color === c ? " on" : "")}
-              style={{ background: c }}
-              onClick={() => setColor(c)}
-            />
-          ))}
+      <div className="panel leave-panel">
+        <div>
+          <b>Leave this family</b>
+          <p className="muted small">
+            You'll be removed from {familyName || activeCode}. You can rejoin with the code anytime.
+          </p>
         </div>
-        <button className="btn primary">Add member</button>
-        <p className="muted small">Tip: add everyone's profile once — then each person just taps "who am I" on their device.</p>
-      </form>
+        <button
+          className="btn danger"
+          disabled={leaving}
+          onClick={async () => {
+            if (!confirm(`Leave ${familyName || activeCode}?`)) return;
+            setLeaving(true);
+            await leaveFamily();
+          }}
+        >
+          <IconLogout size={16} /> Leave
+        </button>
+      </div>
     </div>
   );
 }

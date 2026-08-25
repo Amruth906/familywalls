@@ -6,18 +6,26 @@ import {
   setDoc,
   addDoc,
   getDoc,
+  getDocs,
   deleteDoc,
   updateDoc,
-  serverTimestamp,
   query,
-  orderBy,
+  where,
+  serverTimestamp,
+  runTransaction,
+  deleteField,
 } from "firebase/firestore";
-import { db } from "./firebase.js";
+import {
+  signInWithPopup,
+  signOut as fbSignOut,
+  onAuthStateChanged,
+} from "firebase/auth";
+import { db, auth, googleProvider } from "./firebase.js";
 
-const FamilyContext = createContext(null);
+const AppContext = createContext(null);
 
 export const MEMBER_COLORS = [
-  "#ff7a59",
+  "#ff6b4a",
   "#4f8cff",
   "#22b07d",
   "#9b59f6",
@@ -27,108 +35,200 @@ export const MEMBER_COLORS = [
   "#8bc34a",
 ];
 
-const SESSION_KEY = "fh_session";
-
-function loadSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY)) || null;
-  } catch {
-    return null;
-  }
+export function colorForUid(uid) {
+  let h = 0;
+  for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
+  return MEMBER_COLORS[h % MEMBER_COLORS.length];
 }
 
-function makeCode() {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-}
-
-export function FamilyProvider({ children }) {
-  const [session, setSession] = useState(loadSession);
+export function AppProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [families, setFamilies] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [activeCode, setActiveCode] = useState(
+    () => localStorage.getItem("fh_active_code") || null
+  );
   const [familyName, setFamilyName] = useState("");
   const [members, setMembers] = useState([]);
 
   useEffect(() => {
-    if (!session?.code) {
+    let unsubProfile = null;
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
+      setUser(u);
+      setAuthLoading(false);
+      if (!u) {
+        setFamilies(null);
+        setProfileLoading(false);
+        return;
+      }
+      await setDoc(
+        doc(db, "users", u.uid),
+        {
+          name: u.displayName || "Member",
+          email: u.email || null,
+          photoURL: u.photoURL || null,
+          lastLogin: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      unsubProfile = onSnapshot(doc(db, "users", u.uid), (snap) => {
+        const fams = snap.exists() ? Object.keys(snap.data().families || {}) : [];
+        setFamilies(fams);
+        setProfileLoading(false);
+      });
+    });
+    return () => {
+      unsub();
+      if (unsubProfile) unsubProfile();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user || !families) return;
+    let code = activeCode && families.includes(activeCode) ? activeCode : families[0] || null;
+    if (code !== activeCode) setActiveCode(code);
+    if (!code) {
       setFamilyName("");
       setMembers([]);
       return;
     }
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-
-    const unsubFam = onSnapshot(doc(db, "families", session.code), (snap) => {
-      if (!snap.exists()) return;
-      setFamilyName(snap.data().name || "My Family");
+    localStorage.setItem("fh_active_code", code);
+    const unsubFam = onSnapshot(doc(db, "families", code), (snap) => {
+      setFamilyName(snap.exists() ? snap.data().name : "");
     });
-
-    const unsubMembers = onSnapshot(
-      query(collection(db, "families", session.code, "members"), orderBy("createdAt", "asc")),
-      (snap) => setMembers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    );
-
+    const unsubMembers = onSnapshot(collection(db, "families", code, "members"), (snap) => {
+      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+      setMembers(list);
+      const mine = list.find((m) => m.id === user.uid);
+      if (!mine) {
+        setDoc(
+          doc(db, "families", code, "members", user.uid),
+          {
+            name: user.displayName || "Member",
+            photoURL: user.photoURL || null,
+            color: colorForUid(user.uid),
+            joinedAt: Date.now(),
+          },
+          { merge: true }
+        ).catch(() => {});
+      }
+    });
     return () => {
       unsubFam();
       unsubMembers();
     };
-  }, [session?.code]);
+  }, [user, families, activeCode]);
 
-  async function createFamily(name, memberName) {
-    const code = makeCode();
-    await setDoc(doc(db, "families", code), {
-      name: name.trim() || "My Family",
-      createdAt: serverTimestamp(),
-    });
-    const memberId = await joinFamily(code, memberName);
-    return { code, memberId };
+  async function signInWithGoogle() {
+    const res = await signInWithPopup(auth, googleProvider);
+    return res.user;
   }
 
-  async function joinFamily(code, memberName) {
-    const ref = doc(db, "families", code.toUpperCase());
-    const snap = await getDoc(ref);
+  async function signOut() {
+    setActiveCode(null);
+    localStorage.removeItem("fh_active_code");
+    await fbSignOut(auth);
+  }
+
+  function normalizeCode(code) {
+    return String(code || "").trim().toUpperCase();
+  }
+
+  async function createFamily(name, code) {
+    const c = normalizeCode(code);
+    if (!/^[A-Z0-9-]{3,16}$/.test(c))
+      throw new Error("Code must be 3–16 letters, numbers or dashes.");
+    const famRef = doc(db, "families", c);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(famRef);
+      if (snap.exists()) throw new Error("That code is already taken — try another.");
+      tx.set(famRef, {
+        name: (name || "").trim() || "My Family",
+        code: c,
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      });
+      tx.set(doc(db, "families", c, "members", user.uid), {
+        name: user.displayName || "Member",
+        photoURL: user.photoURL || null,
+        color: colorForUid(user.uid),
+        joinedAt: Date.now(),
+      });
+    });
+    await setDoc(
+      doc(db, "users", user.uid),
+      { [`families.${c}`]: true },
+      { merge: true }
+    );
+    setActiveCode(c);
+    return c;
+  }
+
+  async function joinFamily(code) {
+    const c = normalizeCode(code);
+    const famRef = doc(db, "families", c);
+    const snap = await getDoc(famRef);
     if (!snap.exists()) throw new Error("No family found with that code.");
-    const membersRef = collection(ref, "members");
-    const color = MEMBER_COLORS[Math.floor(Math.random() * MEMBER_COLORS.length)];
-    const mRef = await addDoc(membersRef, {
-      name: memberName.trim(),
-      color,
-      createdAt: Date.now(),
-    });
-    setSession({ code: code.toUpperCase(), memberId: mRef.id });
-    return mRef.id;
+    await setDoc(
+      doc(db, "families", c, "members", user.uid),
+      {
+        name: user.displayName || "Member",
+        photoURL: user.photoURL || null,
+        color: colorForUid(user.uid),
+        joinedAt: Date.now(),
+      },
+      { merge: true }
+    );
+    await setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true });
+    setActiveCode(c);
   }
 
-  function switchMember(memberId) {
-    setSession((s) => ({ ...s, memberId }));
+  async function leaveFamily() {
+    if (!activeCode) return;
+    await deleteDoc(doc(db, "families", activeCode, "members", user.uid)).catch(() => {});
+    await setDoc(
+      doc(db, "users", user.uid),
+      { [`families.${activeCode}`]: deleteField() },
+      { merge: true }
+    );
+    setActiveCode(null);
+    localStorage.removeItem("fh_active_code");
   }
 
-  function leaveFamily() {
-    localStorage.removeItem(SESSION_KEY);
-    setSession(null);
-  }
+  const me = user ? members.find((m) => m.id === user.uid) || null : null;
 
   const value = {
-    session,
+    user,
+    authLoading,
+    profileLoading,
+    families: families || [],
+    activeCode,
     familyName,
     members,
-    me: members.find((m) => m.id === session?.memberId) || null,
+    me,
+    signInWithGoogle,
+    signOut,
     createFamily,
     joinFamily,
-    switchMember,
     leaveFamily,
+    setActiveCode,
   };
 
-  return <FamilyContext.Provider value={value}>{children}</FamilyContext.Provider>;
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
 
-export function useFamily() {
-  return useContext(FamilyContext);
+export function useApp() {
+  return useContext(AppContext);
 }
-
-// ---------- shared data helpers ----------
 
 export function famCol(code, path) {
   return collection(db, "families", code, path);
 }
 
-export { doc, collection, onSnapshot, setDoc, addDoc, getDoc, deleteDoc, updateDoc, serverTimestamp, query, orderBy };
+export { doc, collection, onSnapshot, setDoc, addDoc, getDoc, getDocs, deleteDoc, updateDoc, serverTimestamp, query, where };

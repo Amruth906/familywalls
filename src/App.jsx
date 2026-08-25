@@ -1,130 +1,162 @@
 import React, { useState } from "react";
-import { FamilyProvider, useFamily } from "./store.jsx";
+import { AppProvider, useApp } from "./store.jsx";
 import { isConfigured } from "./firebase.js";
-import JoinScreen from "./pages/JoinScreen.jsx";
+import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy } from "./components/Icons.jsx";
+import LoginScreen from "./pages/LoginScreen.jsx";
+import FamilySetup from "./pages/FamilySetup.jsx";
 import Home from "./pages/Home.jsx";
 import Todos from "./pages/Todos.jsx";
 import ListsPage from "./pages/ListsPage.jsx";
 import CalendarPage from "./pages/CalendarPage.jsx";
 import Members from "./pages/Members.jsx";
+import Avatar from "./components/Avatar.jsx";
+import "./styles.css";
 
-const TABS = [
-  { id: "home", label: "Home", icon: "🏠" },
-  { id: "todos", label: "To-Dos", icon: "✅" },
-  { id: "lists", label: "Lists", icon: "🛒" },
-  { id: "calendar", label: "Calendar", icon: "📅" },
-  { id: "members", label: "Family", icon: "👨‍👩‍👧‍👦" },
+const NAV = [
+  { id: "home", label: "Home", Icon: IconHome },
+  { id: "todos", label: "To-Dos", Icon: IconCheckSquare },
+  { id: "lists", label: "Lists", Icon: IconCart },
+  { id: "calendar", label: "Calendar", Icon: IconCalendar },
+  { id: "members", label: "Family", Icon: IconUsers },
 ];
 
-function SetupScreen() {
+function Splash() {
   return (
-    <div className="center-screen">
-      <div className="card setup-card">
-        <div className="logo-big">🏠</div>
-        <h1>FamilyHub needs a quick setup</h1>
-        <ol>
-          <li>
-            Go to{" "}
-            <a href="https://console.firebase.google.com" target="_blank" rel="noreferrer">
-              console.firebase.google.com
-            </a>{" "}
-            and create a free project.
-          </li>
-          <li>
-            Click the <b>&lt;/&gt;</b> (web) icon, register an app, and copy the{" "}
-            <b>firebaseConfig</b> object.
-          </li>
-          <li>
-            Open <code>src/firebase.js</code> and paste your values over the
-            PASTE_YOUR_... placeholders.
-          </li>
-          <li>
-            In Firebase console: <b>Build → Firestore Database → Create database</b>.
-          </li>
-          <li>Restart / redeploy the app.</li>
-        </ol>
-        <p className="muted">Full guide with pictures-free steps is in README.md</p>
+    <div className="splash">
+      <Logo size={64} />
+      <div className="splash-ring" />
+    </div>
+  );
+}
+
+function SetupGate() {
+  const { authLoading, profileLoading, user, families, activeCode, familyName } = useApp();
+
+  if (!isConfigured)
+    return (
+      <div className="auth-bg">
+        <div className="blob blob-a" />
+        <div className="blob blob-b" />
+        <div className="setup-card">
+          <div className="setup-head">
+            <Logo size={34} />
+            <h2>Quick setup needed</h2>
+          </div>
+          <ol className="setup-steps">
+            <li>Create a free project at console.firebase.google.com</li>
+            <li>Register a web app and copy the firebaseConfig</li>
+            <li>Paste it into <code>src/firebase.js</code></li>
+            <li>Create a Firestore database and publish the rules from <code>firestore.rules</code></li>
+          </ol>
+        </div>
+      </div>
+    );
+
+  if (authLoading || (user && profileLoading)) return <Splash />;
+  if (!user) return <LoginScreen />;
+  if (!families.length) return <FamilySetup />;
+  if (!activeCode) return <Splash />;
+  return <Shell key={activeCode} />;
+}
+
+function Shell() {
+  const { user, familyName, activeCode, families, setActiveCode, signOut } = useApp();
+  const [tab, setTab] = useState("home");
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="side-brand">
+          <Logo size={34} />
+          <div className="side-wordmark">
+            Family<span>Hub</span>
+          </div>
+        </div>
+
+        {families.length > 1 && (
+          <select
+            className="fam-switch"
+            value={activeCode}
+            onChange={(e) => setActiveCode(e.target.value)}
+          >
+            {families.map((c) => (
+              <option key={c} value={c}>
+                {c === activeCode ? familyName || c : c}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <nav className="side-nav">
+          {NAV.map(({ id, label, Icon }) => (
+            <button key={id} className={"nav-item" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>
+              <Icon size={20} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="side-foot">
+          <div className="side-user">
+            <Avatar src={user.photoURL} name={user.displayName} color="#4f8cff" size={36} />
+            <div className="side-user-info">
+              <b>{user.displayName}</b>
+              <span className="muted">{activeCode}</span>
+            </div>
+          </div>
+          <button className="icon-btn" title="Sign out" onClick={signOut}>
+            <IconLogout size={18} />
+          </button>
+        </div>
+      </aside>
+
+      <div className="main">
+        <header className="mobile-top">
+          <div className="mobile-brand">
+            <Logo size={30} />
+            <div>
+              <div className="mobile-fam">{familyName}</div>
+              <button
+                className="invite-btn"
+                onClick={() => navigator.clipboard?.writeText(activeCode)}
+                title="Copy family code"
+              >
+                <IconCopy size={12} /> {activeCode}
+              </button>
+            </div>
+          </div>
+          <button className="icon-btn" title="Sign out" onClick={signOut}>
+            <IconLogout size={18} />
+          </button>
+        </header>
+
+        <main className="content">
+          <div className="page-anim" key={tab}>
+            {tab === "home" && <Home goto={setTab} />}
+            {tab === "todos" && <Todos />}
+            {tab === "lists" && <ListsPage />}
+            {tab === "calendar" && <CalendarPage />}
+            {tab === "members" && <Members />}
+          </div>
+        </main>
+
+        <nav className="tabbar">
+          {NAV.map(({ id, label, Icon }) => (
+            <button key={id} className={"tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>
+              <Icon size={21} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
       </div>
     </div>
   );
 }
 
-function Shell() {
-  const { session, familyName, members, me, switchMember, leaveFamily } = useFamily();
-  const [tab, setTab] = useState("home");
-
-  if (!session) return <JoinScreen />;
-
-  const code = session.code;
-
-  return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="logo">🏠</span>
-          <div>
-            <div className="fam-name">{familyName}</div>
-            <button
-              className="invite-btn"
-              title="Copy invite code"
-              onClick={() => navigator.clipboard?.writeText(code)}
-            >
-              Code: <b>{code}</b> 📋
-            </button>
-          </div>
-        </div>
-
-        {me && (
-          <div className="top-right">
-            <select
-              className="who"
-              value={me.id}
-              onChange={(e) => switchMember(e.target.value)}
-              style={{ borderColor: me.color }}
-              title="Who are you?"
-            >
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-            <button className="leave" onClick={leaveFamily} title="Leave family">
-              ⎋
-            </button>
-          </div>
-        )}
-      </header>
-
-      <main className="content">
-        {tab === "home" && <Home goto={setTab} />}
-        {tab === "todos" && <Todos />}
-        {tab === "lists" && <ListsPage />}
-        {tab === "calendar" && <CalendarPage />}
-        {tab === "members" && <Members />}
-      </main>
-
-      <nav className="tabbar">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={"tab" + (tab === t.id ? " active" : "")}
-            onClick={() => setTab(t.id)}
-          >
-            <span className="tab-icon">{t.icon}</span>
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </nav>
-    </div>
-  );
-}
-
 export default function App() {
-  if (!isConfigured) return <SetupScreen />;
   return (
-    <FamilyProvider>
-      <Shell />
-    </FamilyProvider>
+    <AppProvider>
+      <SetupGate />
+    </AppProvider>
   );
 }

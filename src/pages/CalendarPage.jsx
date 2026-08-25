@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { doc, addDoc, deleteDoc } from "firebase/firestore";
-import { useFamily, famCol } from "../store.jsx";
+import { useApp, famCol } from "../store.jsx";
 import { db } from "../firebase.js";
 import { useCollection } from "../useData.js";
+import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "../components/Icons.jsx";
 
-const WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEK = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -15,8 +16,8 @@ function ymd(y, m, d) {
 }
 
 export default function CalendarPage() {
-  const { session, members, me } = useFamily();
-  const { docs: events } = useCollection(session.code, "events");
+  const { user, activeCode, members, me } = useApp();
+  const { docs: events } = useCollection(activeCode, "events");
   const today = new Date();
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [selected, setSelected] = useState(ymd(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -56,20 +57,24 @@ export default function CalendarPage() {
 
   return (
     <div className="page">
-      <h2>Calendar</h2>
+      <h2 className="page-title">Calendar</h2>
       <div className="split cal-split">
-        <section className="card">
+        <section className="panel">
           <div className="cal-head">
-            <button className="btn ghost" onClick={() => nav(-1)}>‹</button>
+            <button className="icon-btn" onClick={() => nav(-1)}>
+              <IconChevronLeft size={18} />
+            </button>
             <h3>
-              {MONTHS[view.m]} {view.y}
+              {MONTHS[view.m]} <span className="muted">{view.y}</span>
             </h3>
-            <button className="btn ghost" onClick={() => nav(1)}>›</button>
+            <button className="icon-btn" onClick={() => nav(1)}>
+              <IconChevronRight size={18} />
+            </button>
           </div>
 
           <div className="cal-grid">
-            {WEEK.map((w) => (
-              <div key={w} className="dow">{w}</div>
+            {WEEK.map((w, i) => (
+              <div key={i} className="dow">{w}</div>
             ))}
             {cells.map((d, i) => {
               if (!d) return <div key={"e" + i} />;
@@ -79,21 +84,17 @@ export default function CalendarPage() {
               return (
                 <button
                   key={dateStr}
-                  className={
-                    "day" +
-                    (dateStr === selected ? " sel" : "") +
-                    (isToday ? " today" : "")
-                  }
+                  className={"day" + (dateStr === selected ? " sel" : "") + (isToday ? " today" : "")}
                   onClick={() => setSelected(dateStr)}
                 >
-                  {d}
+                  <span>{d}</span>
                   {evs.length > 0 && (
                     <span className="dots">
                       {evs.slice(0, 3).map((ev) => (
                         <span
                           key={ev.id}
                           className="dot"
-                          style={{ background: memberById[ev.memberId]?.color || "#ff7a59" }}
+                          style={{ background: memberById[ev.memberId]?.color || "#ff6b4a" }}
                         />
                       ))}
                     </span>
@@ -103,31 +104,44 @@ export default function CalendarPage() {
             })}
           </div>
 
-          <AddEvent code={session.code} date={selected} meId={me?.id} members={members} />
+          <AddEvent code={activeCode} date={selected} meId={user.uid} members={members} fallbackColor={me?.color} />
         </section>
 
-        <aside className="side card grow-card">
-          <h3>{selected} · {dayEvents.length}</h3>
-          <ul className="todo-list">
+        <aside className="panel side-panel">
+          <header className="panel-head">
+            <h3>
+              {new Date(selected + "T00:00").toLocaleDateString(undefined, {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              })}
+            </h3>
+            <span className="count-pill">{dayEvents.length}</span>
+          </header>
+
+          <ul className="row-list">
             {dayEvents.map((ev) => (
               <li key={ev.id}>
-                <span className="dot big-dot" style={{ background: memberById[ev.memberId]?.color || "#ff7a59" }} />
-                <div className="todo-body">
-                  <span className="todo-text">
+                <span
+                  className="dot big-dot"
+                  style={{ background: memberById[ev.memberId]?.color || "#ff6b4a" }}
+                />
+                <div className="row-body">
+                  <span className="row-title">
                     {ev.time && <b className="time">{ev.time}</b>} {ev.title}
                   </span>
-                  {ev.note && <span className="todo-meta">{ev.note}</span>}
+                  {ev.note && <span className="row-sub">{ev.note}</span>}
                 </div>
                 <button
-                  className="x"
-                  onClick={() => deleteDoc(doc(db, "families", session.code, "events", ev.id))}
+                  className="icon-btn danger"
+                  onClick={() => deleteDoc(doc(db, "families", activeCode, "events", ev.id))}
                   title="Delete event"
                 >
-                  ✕
+                  <IconX size={16} />
                 </button>
               </li>
             ))}
-            {!dayEvents.length && <p className="muted">No plans this day. Add one above 👆</p>}
+            {!dayEvents.length && <p className="empty">No plans this day.</p>}
           </ul>
 
           <h4 className="muted-head">Coming up</h4>
@@ -135,12 +149,14 @@ export default function CalendarPage() {
             {upcoming.map((ev) => (
               <li key={ev.id}>
                 <button onClick={() => setSelected(ev.date)}>
-                  <span className="dot" style={{ background: memberById[ev.memberId]?.color || "#ff7a59" }} />
-                  <b>{ev.date}</b> {ev.time && <span>({ev.time})</span>} — {ev.title}
+                  <span className="dot" style={{ background: memberById[ev.memberId]?.color || "#ff6b4a" }} />
+                  <b>{ev.date.slice(5)}</b>
+                  {ev.time && <span className="time"> {ev.time}</span>}
+                  <span className="up-title"> — {ev.title}</span>
                 </button>
               </li>
             ))}
-            {!upcoming.length && <p className="muted">Nothing scheduled yet.</p>}
+            {!upcoming.length && <p className="empty">Nothing scheduled.</p>}
           </ul>
         </aside>
       </div>
@@ -160,8 +176,8 @@ function AddEvent({ code, date, meId, members }) {
       title: title.trim(),
       date,
       time,
-      memberId: memberId || meId || null,
-      createdBy: meId || null,
+      memberId: memberId || meId,
+      createdBy: meId,
       createdAt: Date.now(),
     });
     setTitle("");
@@ -182,11 +198,13 @@ function AddEvent({ code, date, meId, members }) {
         <option value="">Whose?</option>
         {members.map((m) => (
           <option key={m.id} value={m.id}>
-            {m.name}
+            {m.name.split(" ")[0]}
           </option>
         ))}
       </select>
-      <button className="btn primary">Add</button>
+      <button className="btn primary">
+        <IconPlus size={16} />
+      </button>
     </form>
   );
 }
