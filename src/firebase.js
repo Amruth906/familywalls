@@ -14,12 +14,12 @@ import { getFirestore } from "firebase/firestore";
 // ============================================================
 
 const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
-  projectId: "PASTE_YOUR_PROJECT_ID",
-  storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId: "PASTE_YOUR_APP_ID",
+  apiKey: "AIzaSyDwORr8j6cU3XeWMMYB2xiUCTRLhdSI3Qo",
+  authDomain: "familywall-cc987.firebaseapp.com",
+  projectId: "familywall-cc987",
+  storageBucket: "familywall-cc987.firebasestorage.app",
+  messagingSenderId: "803853686644",
+  appId: "1:803853686644:web:efb298f52ede3a2a09be21",
 };
 
 export const isConfigured = !Object.values(firebaseConfig).some((v) =>
