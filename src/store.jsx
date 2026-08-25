@@ -21,6 +21,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase.js";
+import { setDbError } from "./dbError.js";
 
 const AppContext = createContext(null);
 
@@ -40,6 +41,27 @@ export function colorForUid(uid) {
   for (let i = 0; i < uid.length; i++) h = (h * 31 + uid.charCodeAt(i)) >>> 0;
   return MEMBER_COLORS[h % MEMBER_COLORS.length];
 }
+
+export function friendly(e) {
+  const code = String(e?.code || "");
+  if (code.includes("permission-denied"))
+    return "Firestore rules blocked this. Firebase console → Firestore Database → Rules → paste the rules from the firestore.rules file → Publish, then reload.";
+  if (code.includes("unavailable") || code.includes("network-request-failed") || code.includes("internal"))
+    return "Can't reach Firebase. Check your internet, disable ad-blockers for this site, and try again.";
+  if (code.includes("unauthenticated"))
+    return "Your session expired — please sign in again.";
+  return e?.message || "Something went wrong.";
+}
+
+function withTimeout(p, ms = 15000, msg) {
+  return Promise.race([
+    p,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms)),
+  ]);
+}
+
+const NET_TIMEOUT_MSG =
+  "This is taking unusually long — the database isn't responding. Check your internet, disable ad-blockers for this site, then reload and try again.";
 
 export function AppProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -66,21 +88,36 @@ export function AppProvider({ children }) {
         setProfileLoading(false);
         return;
       }
-      await setDoc(
+      try {
+        await withTimeout(
+          setDoc(
+            doc(db, "users", u.uid),
+            {
+              name: u.displayName || "Member",
+              email: u.email || null,
+              photoURL: u.photoURL || null,
+              lastLogin: serverTimestamp(),
+            },
+            { merge: true }
+          ),
+          15000,
+          NET_TIMEOUT_MSG
+        );
+      } catch (e) {
+        setDbError(friendly(e));
+      }
+      unsubProfile = onSnapshot(
         doc(db, "users", u.uid),
-        {
-          name: u.displayName || "Member",
-          email: u.email || null,
-          photoURL: u.photoURL || null,
-          lastLogin: serverTimestamp(),
+        (snap) => {
+          const fams = snap.exists() ? Object.keys(snap.data().families || {}) : [];
+          setFamilies(fams);
+          setProfileLoading(false);
         },
-        { merge: true }
+        (e) => {
+          setDbError(friendly(e));
+          setProfileLoading(false);
+        }
       );
-      unsubProfile = onSnapshot(doc(db, "users", u.uid), (snap) => {
-        const fams = snap.exists() ? Object.keys(snap.data().families || {}) : [];
-        setFamilies(fams);
-        setProfileLoading(false);
-      });
     });
     return () => {
       unsub();
@@ -98,27 +135,33 @@ export function AppProvider({ children }) {
       return;
     }
     localStorage.setItem("fh_active_code", code);
-    const unsubFam = onSnapshot(doc(db, "families", code), (snap) => {
-      setFamilyName(snap.exists() ? snap.data().name : "");
-    });
-    const unsubMembers = onSnapshot(collection(db, "families", code, "members"), (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
-      setMembers(list);
-      const mine = list.find((m) => m.id === user.uid);
-      if (!mine) {
-        setDoc(
-          doc(db, "families", code, "members", user.uid),
-          {
-            name: user.displayName || "Member",
-            photoURL: user.photoURL || null,
-            color: colorForUid(user.uid),
-            joinedAt: Date.now(),
-          },
-          { merge: true }
-        ).catch(() => {});
-      }
-    });
+    const unsubFam = onSnapshot(
+      doc(db, "families", code),
+      (snap) => setFamilyName(snap.exists() ? snap.data().name : ""),
+      (e) => setDbError(friendly(e))
+    );
+    const unsubMembers = onSnapshot(
+      collection(db, "families", code, "members"),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
+        setMembers(list);
+        const mine = list.find((m) => m.id === user.uid);
+        if (!mine) {
+          setDoc(
+            doc(db, "families", code, "members", user.uid),
+            {
+              name: user.displayName || "Member",
+              photoURL: user.photoURL || null,
+              color: colorForUid(user.uid),
+              joinedAt: Date.now(),
+            },
+            { merge: true }
+          ).catch((e) => setDbError(friendly(e)));
+        }
+      },
+      (e) => setDbError(friendly(e))
+    );
     return () => {
       unsubFam();
       unsubMembers();
@@ -145,27 +188,31 @@ export function AppProvider({ children }) {
     if (!/^[A-Z0-9-]{3,16}$/.test(c))
       throw new Error("Code must be 3–16 letters, numbers or dashes.");
     const famRef = doc(db, "families", c);
-    await runTransaction(db, async (tx) => {
-      const snap = await tx.get(famRef);
-      if (snap.exists()) throw new Error("That code is already taken — try another.");
-      tx.set(famRef, {
-        name: (name || "").trim() || "My Family",
-        code: c,
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-      });
-      tx.set(doc(db, "families", c, "members", user.uid), {
-        name: user.displayName || "Member",
-        photoURL: user.photoURL || null,
-        color: colorForUid(user.uid),
-        joinedAt: Date.now(),
-      });
-    });
-    await setDoc(
-      doc(db, "users", user.uid),
-      { [`families.${c}`]: true },
-      { merge: true }
-    );
+    try {
+      await withTimeout(
+        runTransaction(db, async (tx) => {
+          const snap = await tx.get(famRef);
+          if (snap.exists()) throw new Error("That code is already taken — try another.");
+          tx.set(famRef, {
+            name: (name || "").trim() || "My Family",
+            code: c,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+          });
+          tx.set(doc(db, "families", c, "members", user.uid), {
+            name: user.displayName || "Member",
+            photoURL: user.photoURL || null,
+            color: colorForUid(user.uid),
+            joinedAt: Date.now(),
+          });
+        }),
+        20000,
+        NET_TIMEOUT_MSG
+      );
+    } catch (e) {
+      throw new Error(friendly(e));
+    }
+    await setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true });
     setActiveCode(c);
     return c;
   }
@@ -173,18 +220,35 @@ export function AppProvider({ children }) {
   async function joinFamily(code) {
     const c = normalizeCode(code);
     const famRef = doc(db, "families", c);
-    const snap = await getDoc(famRef);
+    let snap;
+    try {
+      snap = await withTimeout(
+        getDoc(famRef),
+        15000,
+        NET_TIMEOUT_MSG
+      );
+    } catch (e) {
+      throw new Error(friendly(e));
+    }
     if (!snap.exists()) throw new Error("No family found with that code.");
-    await setDoc(
-      doc(db, "families", c, "members", user.uid),
-      {
-        name: user.displayName || "Member",
-        photoURL: user.photoURL || null,
-        color: colorForUid(user.uid),
-        joinedAt: Date.now(),
-      },
-      { merge: true }
-    );
+    try {
+      await withTimeout(
+        setDoc(
+          doc(db, "families", c, "members", user.uid),
+          {
+            name: user.displayName || "Member",
+            photoURL: user.photoURL || null,
+            color: colorForUid(user.uid),
+            joinedAt: Date.now(),
+          },
+          { merge: true }
+        ),
+        15000,
+        NET_TIMEOUT_MSG
+      );
+    } catch (e) {
+      throw new Error(friendly(e));
+    }
     await setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true });
     setActiveCode(c);
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { onSnapshot } from "firebase/firestore";
-import { famCol } from "./store.jsx";
+import { famCol, friendly } from "./store.jsx";
+import { setDbError } from "./dbError.js";
 
 export function useCollection(code, subPath) {
   const [docs, setDocs] = useState([]);
@@ -11,10 +12,17 @@ export function useCollection(code, subPath) {
       setLoading(false);
       return;
     }
-    const unsub = onSnapshot(famCol(code, subPath), (snap) => {
-      setDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
+    const unsub = onSnapshot(
+      famCol(code, subPath),
+      (snap) => {
+        setDocs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      (e) => {
+        setDbError(friendly(e));
+        setLoading(false);
+      }
+    );
     return unsub;
   }, [code, subPath]);
 

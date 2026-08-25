@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./store.jsx";
 import { isConfigured } from "./firebase.js";
+import { onDbError } from "./dbError.js";
 import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy } from "./components/Icons.jsx";
 import LoginScreen from "./pages/LoginScreen.jsx";
 import FamilySetup from "./pages/FamilySetup.jsx";
@@ -153,9 +154,22 @@ function Shell() {
   );
 }
 
+function DbBanner() {
+  const [msg, setMsg] = useState(null);
+  useEffect(() => onDbError(setMsg), []);
+  if (!msg) return null;
+  return (
+    <div className="db-banner" onClick={() => setMsg(null)}>
+      <span>⚠️ {msg}</span>
+      <b>✕</b>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <AppProvider>
+      <DbBanner />
       <SetupGate />
     </AppProvider>
   );
