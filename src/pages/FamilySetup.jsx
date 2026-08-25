@@ -4,6 +4,7 @@ import { getDoc, doc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { Logo, IconArrowLeft, IconSparkles, IconLink, IconCheck } from "../components/Icons.jsx";
 import { VERSION } from "../App.jsx";
+import { resetAppData } from "../firebase.js";
 
 export default function FamilySetup() {
   const { user, createFamily, joinFamily, signOut } = useApp();
@@ -17,6 +18,7 @@ export default function FamilySetup() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState("");
   const timer = useRef(null);
 
   useEffect(() => {
@@ -40,13 +42,15 @@ export default function FamilySetup() {
     e.preventDefault();
     setError("");
     setBusy(true);
+    setStep("");
     try {
-      if (mode === "create") await createFamily(famName, code);
-      else await joinFamily(joinCode);
+      if (mode === "create") await createFamily(famName, code, setStep);
+      else await joinFamily(joinCode, setStep);
     } catch (err) {
       setError(err.message || "Something went wrong.");
       setBusy(false);
       setAvail(null);
+      setStep("");
     }
   }
 
@@ -146,11 +150,23 @@ export default function FamilySetup() {
           >
             {busy ? "Please wait…" : mode === "create" ? "Create family wall" : "Join family"}
           </button>
+
+          {step && <div className="step-line">{step}</div>}
         </form>
 
         <button className="back" onClick={() => setMode(mode === "create" ? "join" : "create")}>
           <IconArrowLeft size={16} />
           {mode === "create" ? "I have a code instead" : "Create a new family instead"}
+        </button>
+
+        <button
+          className="linklike reset-link"
+          onClick={() => {
+            if (confirm("Reset app data on this device?\n\nYou'll be signed out and the app will reload fresh. Your family data is safe in the cloud."))
+              resetAppData();
+          }}
+        >
+          App stuck? Reset app data on this device
         </button>
 
         <p className="ver">v{VERSION}</p>

@@ -340,6 +340,29 @@ input:focus, select:focus {
   opacity: 0.7;
 }
 
+.step-line {
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--violet);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.reset-link {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-decoration: underline;
+}
+.reset-link:hover { color: var(--ink); }
+
 /* ================= splash ================= */
 .splash {
   min-height: 100vh;

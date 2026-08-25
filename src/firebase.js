@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { initializeFirestore } from "firebase/firestore";
+import { initializeFirestore, terminate, clearIndexedDbPersistence } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 const firebaseConfig = {
@@ -19,6 +19,20 @@ const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 });
+
+export async function resetAppData() {
+  try {
+    await terminate(db);
+  } catch {}
+  try {
+    await clearIndexedDbPersistence(db);
+  } catch {}
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+  } catch {}
+  location.reload();
+}
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 

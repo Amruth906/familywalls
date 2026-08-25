@@ -182,12 +182,13 @@ export function AppProvider({ children }) {
     return String(code || "").trim().toUpperCase();
   }
 
-  async function createFamily(name, code) {
+  async function createFamily(name, code, onStep = () => {}) {
     const c = normalizeCode(code);
     if (!/^[A-Z0-9-]{3,16}$/.test(c))
       throw new Error("Code must be 3–16 letters, numbers or dashes.");
     const famRef = doc(db, "families", c);
     console.info("[FamilyHub] creating family", c);
+    onStep("Checking the code…");
     let existing;
     try {
       existing = await withTimeout(getDoc(famRef), 12000, NET_TIMEOUT_MSG);
@@ -200,6 +201,7 @@ export function AppProvider({ children }) {
       else throw new Error("That code is already taken — try another.");
     }
     if (!alreadyMine) {
+      onStep("Creating your family…");
       try {
         await withTimeout(
           setDoc(famRef, {
@@ -216,6 +218,7 @@ export function AppProvider({ children }) {
         throw new Error(friendly(e));
       }
     }
+    onStep("Adding your profile…");
     try {
       await withTimeout(
         setDoc(
@@ -235,19 +238,22 @@ export function AppProvider({ children }) {
     } catch (e) {
       throw new Error(friendly(e));
     }
+    onStep("Linking to your account…");
     await withTimeout(
       setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
       12000,
       NET_TIMEOUT_MSG
     );
     console.info("[FamilyHub] profile updated — entering family");
+    onStep("");
     setActiveCode(c);
     return c;
   }
 
-  async function joinFamily(code) {
+  async function joinFamily(code, onStep = () => {}) {
     const c = normalizeCode(code);
     const famRef = doc(db, "families", c);
+    onStep("Looking up the family…");
     let snap;
     try {
       snap = await withTimeout(
@@ -260,6 +266,7 @@ export function AppProvider({ children }) {
     }
     if (!snap.exists()) throw new Error("No family found with that code.");
     console.info("[FamilyHub] joining family", c);
+    onStep("Adding your profile…");
     try {
       await withTimeout(
         setDoc(
@@ -284,6 +291,7 @@ export function AppProvider({ children }) {
       NET_TIMEOUT_MSG
     );
     console.info("[FamilyHub] profile updated — entering family");
+    onStep("");
     setActiveCode(c);
   }
 
