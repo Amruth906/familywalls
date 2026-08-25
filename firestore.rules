@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Anyone who knows your family code can read/write that family's data.
+    // Keep the code private — it acts like a password.
+    match /families/{familyCode}/{document=**} {
+      allow read, write: if request.auth == null;
+    }
+  }
+}
