@@ -194,19 +194,29 @@ export function AppProvider({ children }) {
     } catch (e) {
       throw new Error(friendly(e));
     }
-    if (existing.exists()) throw new Error("That code is already taken — try another.");
+    let alreadyMine = false;
+    if (existing.exists()) {
+      if (existing.data().createdBy === user.uid) alreadyMine = true;
+      else throw new Error("That code is already taken — try another.");
+    }
+    if (!alreadyMine) {
+      try {
+        await withTimeout(
+          setDoc(famRef, {
+            name: (name || "").trim() || "My Family",
+            code: c,
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+          }),
+          12000,
+          NET_TIMEOUT_MSG
+        );
+        console.info("[FamilyHub] family doc written");
+      } catch (e) {
+        throw new Error(friendly(e));
+      }
+    }
     try {
-      await withTimeout(
-        setDoc(famRef, {
-          name: (name || "").trim() || "My Family",
-          code: c,
-          createdBy: user.uid,
-          createdAt: serverTimestamp(),
-        }),
-        12000,
-        NET_TIMEOUT_MSG
-      );
-      console.info("[FamilyHub] family doc written");
       await withTimeout(
         setDoc(
           doc(db, "families", c, "members", user.uid),

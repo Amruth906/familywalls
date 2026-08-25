@@ -21,7 +21,7 @@ const NAV = [
   { id: "members", label: "Family", Icon: IconUsers },
 ];
 
-export const VERSION = "1.2.1";
+export const VERSION = "1.3.0";
 
 function Splash() {
   return (
