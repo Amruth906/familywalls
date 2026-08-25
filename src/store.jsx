@@ -126,7 +126,10 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!user || !families) return;
-    let code = activeCode && families.includes(activeCode) ? activeCode : families[0] || null;
+    let code = activeCode;
+    if (families.length) {
+      if (!code || !families.includes(code)) code = families[0];
+    }
     if (code !== activeCode) setActiveCode(code);
     if (!code) {
       setFamilyName("");

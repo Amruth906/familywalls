@@ -21,7 +21,7 @@ const NAV = [
   { id: "members", label: "Family", Icon: IconUsers },
 ];
 
-export const VERSION = "1.4.0";
+export const VERSION = "1.4.1";
 
 function Splash() {
   return (
@@ -58,7 +58,7 @@ function SetupGate() {
 
   if (authLoading || (user && profileLoading)) return <Splash />;
   if (!user) return <LoginScreen />;
-  if (!families.length) return <FamilySetup />;
+  if (!families.length && !activeCode) return <FamilySetup />;
   if (!activeCode) return <Splash />;
   return <Shell key={activeCode} />;
 }
