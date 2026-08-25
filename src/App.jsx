@@ -21,6 +21,8 @@ const NAV = [
   { id: "members", label: "Family", Icon: IconUsers },
 ];
 
+export const VERSION = "1.2.1";
+
 function Splash() {
   return (
     <div className="splash">
@@ -49,6 +51,7 @@ function SetupGate() {
             <li>Paste it into <code>src/firebase.js</code></li>
             <li>Create a Firestore database and publish the rules from <code>firestore.rules</code></li>
           </ol>
+          <p className="ver">v{VERSION}</p>
         </div>
       </div>
     );

@@ -330,6 +330,16 @@ input:focus, select:focus {
 }
 .back:hover { color: var(--ink); }
 
+.ver {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
 /* ================= splash ================= */
 .splash {
   min-height: 100vh;

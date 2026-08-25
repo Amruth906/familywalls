@@ -12,7 +12,6 @@ import {
   query,
   where,
   serverTimestamp,
-  runTransaction,
   deleteField,
 } from "firebase/firestore";
 import {
@@ -188,31 +187,50 @@ export function AppProvider({ children }) {
     if (!/^[A-Z0-9-]{3,16}$/.test(c))
       throw new Error("Code must be 3–16 letters, numbers or dashes.");
     const famRef = doc(db, "families", c);
+    console.info("[FamilyHub] creating family", c);
+    let existing;
+    try {
+      existing = await withTimeout(getDoc(famRef), 12000, NET_TIMEOUT_MSG);
+    } catch (e) {
+      throw new Error(friendly(e));
+    }
+    if (existing.exists()) throw new Error("That code is already taken — try another.");
     try {
       await withTimeout(
-        runTransaction(db, async (tx) => {
-          const snap = await tx.get(famRef);
-          if (snap.exists()) throw new Error("That code is already taken — try another.");
-          tx.set(famRef, {
-            name: (name || "").trim() || "My Family",
-            code: c,
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-          });
-          tx.set(doc(db, "families", c, "members", user.uid), {
+        setDoc(famRef, {
+          name: (name || "").trim() || "My Family",
+          code: c,
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+        }),
+        12000,
+        NET_TIMEOUT_MSG
+      );
+      console.info("[FamilyHub] family doc written");
+      await withTimeout(
+        setDoc(
+          doc(db, "families", c, "members", user.uid),
+          {
             name: user.displayName || "Member",
             photoURL: user.photoURL || null,
             color: colorForUid(user.uid),
             joinedAt: Date.now(),
-          });
-        }),
-        20000,
+          },
+          { merge: true }
+        ),
+        12000,
         NET_TIMEOUT_MSG
       );
+      console.info("[FamilyHub] member doc written");
     } catch (e) {
       throw new Error(friendly(e));
     }
-    await setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true });
+    await withTimeout(
+      setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
+      12000,
+      NET_TIMEOUT_MSG
+    );
+    console.info("[FamilyHub] profile updated — entering family");
     setActiveCode(c);
     return c;
   }
@@ -231,6 +249,7 @@ export function AppProvider({ children }) {
       throw new Error(friendly(e));
     }
     if (!snap.exists()) throw new Error("No family found with that code.");
+    console.info("[FamilyHub] joining family", c);
     try {
       await withTimeout(
         setDoc(
@@ -243,13 +262,18 @@ export function AppProvider({ children }) {
           },
           { merge: true }
         ),
-        15000,
+        12000,
         NET_TIMEOUT_MSG
       );
     } catch (e) {
       throw new Error(friendly(e));
     }
-    await setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true });
+    await withTimeout(
+      setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
+      12000,
+      NET_TIMEOUT_MSG
+    );
+    console.info("[FamilyHub] profile updated — entering family");
     setActiveCode(c);
   }
 

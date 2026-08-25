@@ -3,6 +3,7 @@ import { useApp } from "../store.jsx";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "../firebase.js";
 import { Logo, IconArrowLeft, IconSparkles, IconLink, IconCheck } from "../components/Icons.jsx";
+import { VERSION } from "../App.jsx";
 
 export default function FamilySetup() {
   const { user, createFamily, joinFamily, signOut } = useApp();
@@ -151,6 +152,8 @@ export default function FamilySetup() {
           <IconArrowLeft size={16} />
           {mode === "create" ? "I have a code instead" : "Create a new family instead"}
         </button>
+
+        <p className="ver">v{VERSION}</p>
       </div>
     </div>
   );
