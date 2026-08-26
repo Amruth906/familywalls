@@ -8,7 +8,7 @@ export function useCollection(code, subPath) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!code) {
+    if (!code || !subPath) {
       setLoading(false);
       return;
     }
