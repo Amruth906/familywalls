@@ -88,7 +88,12 @@ export default function FamilySetup() {
       if (mode === "create") await createFamily(famName, code);
       else {
         const c = joinCode.trim().toUpperCase();
-        await requestJoin(c);
+        const res = await requestJoin(c);
+        if (res && res.alreadyMember) {
+          localStorage.removeItem("fh_requested_code");
+          setBusy(false);
+          return;
+        }
         localStorage.setItem("fh_requested_code", c);
         setRequestedCode(c);
       }

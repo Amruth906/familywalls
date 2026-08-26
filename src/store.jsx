@@ -256,12 +256,35 @@ export function AppProvider({ children }) {
     if (!snap.exists()) throw new Error("No family found with that code.");
     if (snap.data().createdBy === user.uid)
       throw new Error("That's your own family — open it from the sidebar.");
-    await setDoc(doc(db, "families", c, "joinRequests", user.uid), {
-      uid: user.uid,
-      name: user.displayName || "Member",
-      photoURL: user.photoURL || null,
-      createdAt: Date.now(),
-    });
+    const memberSnap = await withTimeout(
+      getDoc(doc(db, "families", c, "members", user.uid)),
+      12000,
+      NET_TIMEOUT_MSG
+    );
+    if (memberSnap.exists()) {
+      await withTimeout(
+        setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
+        12000,
+        NET_TIMEOUT_MSG
+      );
+      return { alreadyMember: true };
+    }
+    try {
+      await withTimeout(
+        setDoc(doc(db, "families", c, "joinRequests", user.uid), {
+          uid: user.uid,
+          name: user.displayName || "Member",
+          photoURL: user.photoURL || null,
+          createdAt: Date.now(),
+        }),
+        12000,
+        NET_TIMEOUT_MSG
+      );
+    } catch (e) {
+      throw new Error(
+        "The request may or may not have reached the family. Wait a moment, then enter the same code again — the app will detect it."
+      );
+    }
   }
 
   async function cancelJoinRequest(code) {
