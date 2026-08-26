@@ -823,9 +823,6 @@ input:focus, select:focus {
   border-color: #ffd9e7;
 }
 
-/* ================= mobile tabbar ================= */
-.tabbar { display: none; }
-
 /* ================= db error banner ================= */
 .db-banner {
   position: fixed;
@@ -1362,10 +1359,6 @@ input:focus, select:focus {
 }
 .att-chip:hover { border-color: var(--accent); color: var(--accent); }
 
-@media (max-width: 480px) {
-  .tab span { display: none; }
-  .tab svg { width: 24px; height: 24px; }
-}
 
 @media (max-width: 860px) {
   .msg-layout { grid-template-columns: 1fr; height: calc(100vh - 190px); }
@@ -1667,41 +1660,122 @@ input:focus, select:focus {
   align-items: center;
 }
 
+/* ================= mobile dynamic island ================= */
+.island-bar { display: none; }
+.family-top-btn { display: none; }
+
 /* ================= responsive ================= */
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .sidebar { display: none; }
   .mobile-top { display: flex; }
-  .content { padding: 18px 16px 96px; }
-  .tabbar {
-    display: flex;
-    position: fixed;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(1280px, 100%);
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(14px);
-    border-top: 1px solid var(--line);
-    z-index: 40;
+  .content { padding: 14px 16px 40px; }
+
+  .family-top-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1.5px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 8px 15px;
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
   }
-  .tab {
-    flex: 1;
+  .family-top-btn.on {
+    background: var(--grad);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 6px 16px rgba(244, 63, 142, 0.3);
+  }
+
+  .island-bar {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
-    border: none;
-    background: none;
-    padding: 10px 0 max(10px, env(safe-area-inset-bottom));
-    font-family: var(--font);
-    font-size: 0.64rem;
-    font-weight: 700;
-    color: var(--muted);
-    cursor: pointer;
+    position: sticky;
+    top: 62px;
+    z-index: 35;
+    padding: 6px 14px 10px;
   }
-  .tab.on { color: var(--accent); }
-  .tab.on svg { filter: drop-shadow(0 4px 10px rgba(244, 63, 142, 0.4)); }
+  .island {
+    display: flex;
+    gap: 4px;
+    background: #14141f;
+    border-radius: 999px;
+    padding: 5px;
+    box-shadow: 0 12px 34px rgba(10, 10, 20, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .island-seg {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.72);
+    font-family: var(--font);
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 9px 22px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .island-seg:first-child.on {
+    background: #fff;
+    color: #14141f;
+  }
+  .island-seg:not(:first-child).on {
+    background: var(--grad);
+    color: #fff;
+  }
+  .island-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: rgba(20, 20, 31, 0.28);
+    backdrop-filter: blur(2px);
+  }
+  .island-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 8px;
+    width: min(92vw, 380px);
+    background: #14141f;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 26px;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    box-shadow: 0 26px 70px rgba(10, 10, 20, 0.5);
+    animation: islandPop 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .island-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    border: none;
+    background: rgba(255, 255, 255, 0.06);
+    color: #fff;
+    border-radius: 17px;
+    padding: 14px 6px 11px;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 0.72rem;
+    font-weight: 700;
+    transition: all 0.15s ease;
+  }
+  .island-item:hover { background: rgba(255, 255, 255, 0.13); }
+  .island-item.on { background: var(--grad); box-shadow: 0 8px 20px rgba(244, 63, 142, 0.4); }
 
   .split, .cal-split, .two-col { grid-template-columns: 1fr; }
   .side-panel { position: static; }
@@ -1711,4 +1785,8 @@ input:focus, select:focus {
   .week-grid { grid-template-columns: 1fr; gap: 8px; }
   .meal-widget { grid-template-columns: 1fr 1fr; }
   .bud-summary { grid-template-columns: 1fr 1fr; }
+}
+@keyframes islandPop {
+  from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.94); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }

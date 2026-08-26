@@ -4,7 +4,7 @@ import Avatar from "../components/Avatar.jsx";
 import { IconCopy, IconLink, IconCheck, IconLogout, IconUsers } from "../components/Icons.jsx";
 
 export default function Members() {
-  const { user, activeCode, members, me, familyName, leaveFamily } = useApp();
+  const { user, activeCode, members, me, familyName, leaveFamily, signOut } = useApp();
   const [copied, setCopied] = useState("");
   const [leaving, setLeaving] = useState(false);
 
@@ -66,6 +66,16 @@ export default function Members() {
           ))}
         </ul>
       </section>
+
+      <div className="panel leave-panel">
+        <div>
+          <b>{user.displayName}</b>
+          <p className="muted small">{user.email || "Signed in with Google"}</p>
+        </div>
+        <button className="btn danger" onClick={signOut}>
+          <IconLogout size={16} /> Sign out
+        </button>
+      </div>
 
       <div className="panel leave-panel">
         <div>

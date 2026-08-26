@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./store.jsx";
 import { isConfigured } from "./firebase.js";
 import { onDbError } from "./dbError.js";
-import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy, IconWallet, IconMeal, IconFolder, IconMap, IconChat } from "./components/Icons.jsx";
+import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy, IconWallet, IconMeal, IconFolder, IconMap, IconChat, IconGrid } from "./components/Icons.jsx";
 import LoginScreen from "./pages/LoginScreen.jsx";
 import FamilySetup from "./pages/FamilySetup.jsx";
 import Home from "./pages/Home.jsx";
@@ -31,7 +31,7 @@ const NAV = [
   { id: "members", label: "Family", Icon: IconUsers },
 ];
 
-export const VERSION = "2.0.0";
+export const VERSION = "2.1.0";
 
 function Splash() {
   return (
@@ -76,6 +76,12 @@ function SetupGate() {
 function Shell() {
   const { user, familyName, activeCode, families, setActiveCode, signOut } = useApp();
   const [tab, setTab] = useState("home");
+  const [islandOpen, setIslandOpen] = useState(false);
+
+  function goto(id) {
+    setTab(id);
+    setIslandOpen(false);
+  }
 
   return (
     <div className="shell">
@@ -139,10 +145,34 @@ function Shell() {
               </button>
             </div>
           </div>
-          <button className="icon-btn" title="Sign out" onClick={signOut}>
-            <IconLogout size={18} />
+          <button className={"family-top-btn" + (tab === "members" ? " on" : "")} onClick={() => goto("members")}>
+            <IconUsers size={16} /> Family
           </button>
         </header>
+
+        <div className="island-bar">
+          <div className="island">
+            <button className={"island-seg" + (tab === "home" && !islandOpen ? " on" : "")} onClick={() => goto("home")}>
+              <IconHome size={17} /> Home
+            </button>
+            <button className={"island-seg" + (islandOpen ? " on" : "")} onClick={() => setIslandOpen((o) => !o)}>
+              <IconGrid size={16} /> More
+            </button>
+          </div>
+          {islandOpen && (
+            <>
+              <div className="island-backdrop" onClick={() => setIslandOpen(false)} />
+              <div className="island-menu">
+                {NAV.filter((t) => t.id !== "home").map(({ id, label, Icon }) => (
+                  <button key={id} className={"island-item" + (tab === id ? " on" : "")} onClick={() => goto(id)}>
+                    <Icon size={21} />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
 
         <main className="content">
           <div className="page-anim" key={tab}>
@@ -158,15 +188,6 @@ function Shell() {
             {tab === "members" && <Members />}
           </div>
         </main>
-
-        <nav className="tabbar">
-          {NAV.map(({ id, label, Icon }) => (
-            <button key={id} className={"tab" + (tab === id ? " on" : "")} onClick={() => setTab(id)}>
-              <Icon size={21} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </nav>
       </div>
     </div>
   );
