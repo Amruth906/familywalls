@@ -132,17 +132,29 @@ function Shell() {
 
       <div className="main">
         <header className="mobile-top">
-          <Logo size={32} />
+          <Logo size={30} />
           <div className="island">
-            <button className={"island-seg" + (tab === "home" && !islandOpen ? " on" : "")} onClick={() => goto("home")}>
-              <IconHome size={17} /> Home
+            <button
+              className={"island-seg" + (tab === "home" && !islandOpen ? " on" : "")}
+              onClick={() => goto("home")}
+              title="Home"
+            >
+              <IconHome size={18} />
             </button>
-            <button className={"island-seg" + (islandOpen ? " on" : "")} onClick={() => setIslandOpen((o) => !o)}>
-              <IconGrid size={16} /> More
+            <button
+              className={"island-seg" + (islandOpen ? " on" : "")}
+              onClick={() => setIslandOpen((o) => !o)}
+              title="More"
+            >
+              <IconGrid size={17} />
             </button>
           </div>
-          <button className={"family-top-btn" + (tab === "members" ? " on" : "")} onClick={() => goto("members")}>
-            <IconUsers size={16} /> Family
+          <button
+            className={"family-top-btn" + (tab === "members" ? " on" : "")}
+            onClick={() => goto("members")}
+            title="Family"
+          >
+            <IconUsers size={18} />
           </button>
           {islandOpen && (
             <>
