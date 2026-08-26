@@ -233,14 +233,10 @@ export function AppProvider({ children }) {
       throw new Error(friendly(e));
     }
     onStep("Linking to your account…");
-    await withTimeout(
-      setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
-      12000,
-      NET_TIMEOUT_MSG
-    );
-    console.info("[FamilyHub] profile updated — entering family");
-    onStep("");
     setActiveCode(c);
+    setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true })
+      .catch((e) => setDbError(friendly(e)));
+    console.info("[FamilyHub] family created — entering");
     return c;
   }
 
@@ -262,11 +258,9 @@ export function AppProvider({ children }) {
       NET_TIMEOUT_MSG
     );
     if (memberSnap.exists()) {
-      await withTimeout(
-        setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
-        12000,
-        NET_TIMEOUT_MSG
-      );
+      setActiveCode(c);
+      setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true })
+        .catch((e) => setDbError(friendly(e)));
       return { alreadyMember: true };
     }
     try {
