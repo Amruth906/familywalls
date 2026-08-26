@@ -3,6 +3,7 @@ import { doc, addDoc, deleteDoc } from "firebase/firestore";
 import { useApp, famCol } from "../store.jsx";
 import { db } from "../firebase.js";
 import { useCollection } from "../useData.js";
+import { openDocById } from "../docsUtils.js";
 import { IconChevronLeft, IconChevronRight, IconPlus, IconX } from "../components/Icons.jsx";
 
 const WEEK = ["S", "M", "T", "W", "T", "F", "S"];
@@ -18,6 +19,7 @@ function ymd(y, m, d) {
 export default function CalendarPage() {
   const { user, activeCode, members, me } = useApp();
   const { docs: events } = useCollection(activeCode, "events");
+  const { docs: documents } = useCollection(activeCode, "documents");
   const today = new Date();
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [selected, setSelected] = useState(ymd(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -44,6 +46,17 @@ export default function CalendarPage() {
       const d = new Date(v.y, v.m + delta, 1);
       return { y: d.getFullYear(), m: d.getMonth() };
     });
+  }
+
+  const docById = useMemo(
+    () => Object.fromEntries(documents.map((d) => [d.id, d])),
+    [documents]
+  );
+
+  async function openAttachment(docId) {
+    const res = await openDocById(activeCode, docId);
+    if (res.needPin) alert("Open the Documents tab and enter your safe PIN first.");
+    else if (res.error) alert(res.error);
   }
 
   const upcoming = events
@@ -131,6 +144,19 @@ export default function CalendarPage() {
                     {ev.time && <b className="time">{ev.time}</b>} {ev.title}
                   </span>
                   {ev.note && <span className="row-sub">{ev.note}</span>}
+                  {ev.attachments?.length > 0 && (
+                    <span className="att-row">
+                      {ev.attachments.map((id) => {
+                        const d = docById[id];
+                        if (!d) return null;
+                        return (
+                          <button key={id} className="att-chip" onClick={() => openAttachment(id)} title="Open attachment">
+                            📎 {d.name}
+                          </button>
+                        );
+                      })}
+                    </span>
+                  )}
                 </div>
                 <button
                   className="icon-btn danger"

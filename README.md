@@ -35,6 +35,9 @@ Your config is already pasted into `src/firebase.js`. Still needed in the Fireba
    **Build → Firestore Database → Create database → Start in production mode** → pick a location → **Enable**
 4. **Publish security rules**
    In Firestore → **Rules** tab → paste the contents of [`firestore.rules`](firestore.rules) → **Publish**
+5. **Enable Storage (for the encrypted Documents vault)**
+   **Build → Storage → Get started** → accept the default rules → pick a location → **Done**
+   Then in Storage → **Rules** tab → paste the contents of [`storage.rules`](storage.rules) → **Publish**
 
 ### Part 2 — Run locally (optional)
 
