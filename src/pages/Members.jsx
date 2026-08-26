@@ -20,6 +20,17 @@ export default function Members() {
     <div className="page narrow">
       <h2 className="page-title">Family</h2>
 
+      <div className="fam-info-bar">
+        <span className="fam-info-name">👨‍👩‍👧‍👦 {familyName || "My Family"}</span>
+        <button
+          className="fam-info-code"
+          onClick={() => copy(activeCode, "top")}
+          title="Copy family code"
+        >
+          code: <b>{activeCode}</b> {copied === "top" ? "✓" : "📋"}
+        </button>
+      </div>
+
       <div className="panel invite-panel">
         <div className="invite-badge">
           <IconLink size={18} />

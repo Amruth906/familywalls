@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./store.jsx";
 import { isConfigured } from "./firebase.js";
 import { onDbError } from "./dbError.js";
-import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy, IconWallet, IconMeal, IconFolder, IconMap, IconChat, IconGrid } from "./components/Icons.jsx";
+import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconWallet, IconMeal, IconFolder, IconMap, IconChat, IconGrid } from "./components/Icons.jsx";
 import LoginScreen from "./pages/LoginScreen.jsx";
 import FamilySetup from "./pages/FamilySetup.jsx";
 import Home from "./pages/Home.jsx";
@@ -132,25 +132,7 @@ function Shell() {
 
       <div className="main">
         <header className="mobile-top">
-          <div className="mobile-brand">
-            <Logo size={30} />
-            <div>
-              <div className="mobile-fam">{familyName}</div>
-              <button
-                className="invite-btn"
-                onClick={() => navigator.clipboard?.writeText(activeCode)}
-                title="Copy family code"
-              >
-                <IconCopy size={12} /> {activeCode}
-              </button>
-            </div>
-          </div>
-          <button className={"family-top-btn" + (tab === "members" ? " on" : "")} onClick={() => goto("members")}>
-            <IconUsers size={16} /> Family
-          </button>
-        </header>
-
-        <div className="island-bar">
+          <Logo size={32} />
           <div className="island">
             <button className={"island-seg" + (tab === "home" && !islandOpen ? " on" : "")} onClick={() => goto("home")}>
               <IconHome size={17} /> Home
@@ -159,6 +141,9 @@ function Shell() {
               <IconGrid size={16} /> More
             </button>
           </div>
+          <button className={"family-top-btn" + (tab === "members" ? " on" : "")} onClick={() => goto("members")}>
+            <IconUsers size={16} /> Family
+          </button>
           {islandOpen && (
             <>
               <div className="island-backdrop" onClick={() => setIslandOpen(false)} />
@@ -172,7 +157,7 @@ function Shell() {
               </div>
             </>
           )}
-        </div>
+        </header>
 
         <main className="content">
           <div className="page-anim" key={tab}>
