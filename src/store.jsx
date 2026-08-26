@@ -20,7 +20,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { db, auth, googleProvider } from "./firebase.js";
-import { setDbError } from "./dbError.js";
+import { setDbError, setKicked, onKicked } from "./dbError.js";
 
 const AppContext = createContext(null);
 
@@ -70,12 +70,12 @@ export function AppProvider({ children }) {
   const [activeCode, setActiveCode] = useState(
     () => localStorage.getItem("fh_active_code") || null
   );
+  const [pendingRequest, setPendingRequest] = useState(null);
   const [familyName, setFamilyName] = useState("");
   const [familyCreatedBy, setFamilyCreatedBy] = useState(null);
   const [members, setMembers] = useState([]);
 
   useEffect(() => {
-    let unsubProfile = null;
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (unsubProfile) {
         unsubProfile();
@@ -109,8 +109,9 @@ export function AppProvider({ children }) {
       unsubProfile = onSnapshot(
         doc(db, "users", u.uid),
         (snap) => {
-          const fams = snap.exists() ? Object.keys(snap.data().families || {}) : [];
-          setFamilies(fams);
+          const d = snap.exists() ? snap.data() : {};
+          setFamilies(Object.keys(d.families || {}));
+          setPendingRequest(d.pendingRequest || null);
           setProfileLoading(false);
         },
         (e) => {
@@ -124,6 +125,24 @@ export function AppProvider({ children }) {
       if (unsubProfile) unsubProfile();
     };
   }, []);
+
+  useEffect(() => {
+    const unsub = onKicked((code) => {
+      sessionStorage.setItem("fh_kicked", "1");
+      localStorage.removeItem("fh_active_code");
+      localStorage.removeItem("fh_requested_code");
+      setActiveCode(null);
+      setFamilies((f) => (f || []).filter((c) => c !== code));
+      if (user) {
+        setDoc(
+          doc(db, "users", user.uid),
+          { [`families.${code}`]: deleteField() },
+          { merge: true }
+        ).catch(() => {});
+      }
+    });
+    return unsub;
+  }, [user]);
 
   useEffect(() => {
     if (!user || !families) return;
@@ -168,7 +187,10 @@ export function AppProvider({ children }) {
             });
         }
       },
-      (e) => setDbError(friendly(e))
+      (e) => {
+        if (String(e?.code).includes("permission-denied")) setKicked(code);
+        setDbError(friendly(e));
+      }
     );
     return () => {
       unsubFam();

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { onSnapshot } from "firebase/firestore";
 import { famCol, friendly } from "./store.jsx";
-import { setDbError } from "./dbError.js";
+import { setDbError, setKicked } from "./dbError.js";
 
 export function useCollection(code, subPath) {
   const [docs, setDocs] = useState([]);
@@ -19,6 +19,7 @@ export function useCollection(code, subPath) {
         setLoading(false);
       },
       (e) => {
+        if (String(e?.code).includes("permission-denied")) setKicked(code);
         setDbError(friendly(e));
         setLoading(false);
       }
