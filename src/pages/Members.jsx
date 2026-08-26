@@ -7,7 +7,9 @@ import Avatar from "../components/Avatar.jsx";
 import { IconCopy, IconLink, IconCheck, IconLogout, IconUsers, IconX } from "../components/Icons.jsx";
 
 export default function Members() {
-  const { user, activeCode, members, me, familyName, leaveFamily, signOut } = useApp();
+  const { user, activeCode, members, me, familyName, familyCreatedBy, leaveFamily, signOut, approveJoinRequest, rejectJoinRequest } = useApp();
+  const { docs: joinRequests } = useCollection(activeCode, "joinRequests");
+  const isCreator = familyCreatedBy === user.uid;
   const [copied, setCopied] = useState("");
   const [leaving, setLeaving] = useState(false);
 
