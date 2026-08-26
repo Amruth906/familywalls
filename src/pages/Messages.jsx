@@ -5,6 +5,7 @@ import { db } from "../firebase.js";
 import { useCollection } from "../useData.js";
 import { getMyKeyPair, encryptFor, decryptFor, exportMyKeyPair, importMyKeyPair } from "../chatCrypto.js";
 import Avatar from "../components/Avatar.jsx";
+import { IconPlus } from "../components/Icons.jsx";
 
 const EMOJIS = [
   "😀","😂","🥲","😍","🤗","😎","🥳","😴","🤒","🤩","😅","😭","😡","🤔","🙌","👏",
