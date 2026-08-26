@@ -77,10 +77,29 @@ export default function Members() {
                   </span>
                   <span className="row-sub">Approving gives them full access</span>
                 </div>
-                <button className="btn tiny primary" onClick={() => approveJoinRequest(r)}>
+                <button
+                  className="btn tiny primary"
+                  onClick={async () => {
+                    try {
+                      await approveJoinRequest(r);
+                    } catch (e) {
+                      alert("Couldn't approve: " + (e.message || e));
+                    }
+                  }}
+                >
                   <IconCheck size={14} /> Accept
                 </button>
-                <button className="icon-btn danger" title="Reject" onClick={() => rejectJoinRequest(r)}>
+                <button
+                  className="icon-btn danger"
+                  title="Reject"
+                  onClick={async () => {
+                    try {
+                      await rejectJoinRequest(r);
+                    } catch (e) {
+                      alert("Couldn't reject: " + (e.message || e));
+                    }
+                  }}
+                >
                   <IconX size={15} />
                 </button>
               </li>

@@ -26,15 +26,15 @@ export default function FamilySetup() {
 
   useEffect(() => {
     if (!requestedCode) return;
-    const ref = doc(db, "families", requestedCode, "joinRequests", user.uid);
-    const unsub = onSnapshot(ref, async (snap) => {
-      if (!snap.exists()) {
-        setTimeout(() => {
-          if (!families.includes(requestedCode)) setRejected(true);
-        }, 2000);
-        return;
-      }
-      if (snap.data().status === "approved") {
+    let cancelled = false;
+    const requestRef = doc(db, "families", requestedCode, "joinRequests", user.uid);
+    const memberRef = doc(db, "families", requestedCode, "members", user.uid);
+
+    async function checkApproved() {
+      if (cancelled) return;
+      const msnap = await getDoc(memberRef);
+      if (cancelled) return;
+      if (msnap.exists()) {
         await setDoc(
           doc(db, "users", user.uid),
           { [`families.${requestedCode}`]: true },
@@ -42,9 +42,25 @@ export default function FamilySetup() {
         );
         localStorage.removeItem("fh_requested_code");
         setRequestedCode("");
+      } else {
+        setRejected(true);
       }
+    }
+
+    const unsub = onSnapshot(requestRef, (snap) => {
+      if (!snap.exists()) checkApproved();
     });
-    return unsub;
+    const poll = setInterval(() => {
+      getDoc(memberRef).then((msnap) => {
+        if (!cancelled && msnap.exists()) checkApproved();
+      });
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      unsub();
+      clearInterval(poll);
+    };
   }, [requestedCode, user.uid]);
 
   useEffect(() => {

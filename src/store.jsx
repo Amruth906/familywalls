@@ -277,9 +277,7 @@ export function AppProvider({ children }) {
       color: colorForUid(r.uid),
       joinedAt: Date.now(),
     });
-    await updateDoc(doc(db, "families", activeCode, "joinRequests", r.uid), {
-      status: "approved",
-    });
+    await deleteDoc(doc(db, "families", activeCode, "joinRequests", r.uid));
   }
 
   async function rejectJoinRequest(r) {
