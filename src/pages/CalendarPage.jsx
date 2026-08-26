@@ -20,6 +20,7 @@ export default function CalendarPage() {
   const { user, activeCode, members, me } = useApp();
   const { docs: events } = useCollection(activeCode, "events");
   const { docs: documents } = useCollection(activeCode, "documents");
+  const { docs: myPrivateDocs } = useCollection(activeCode, `privateDocs/${user.uid}/documents`);
   const today = new Date();
   const [view, setView] = useState({ y: today.getFullYear(), m: today.getMonth() });
   const [selected, setSelected] = useState(ymd(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -49,14 +50,22 @@ export default function CalendarPage() {
   }
 
   const docById = useMemo(
-    () => Object.fromEntries(documents.map((d) => [d.id, d])),
-    [documents]
+    () =>
+      Object.fromEntries(
+        [...documents, ...myPrivateDocs].map((d) => [d.id, d])
+      ),
+    [documents, myPrivateDocs]
   );
 
-  async function openAttachment(docId) {
-    const res = await openDocById(activeCode, docId);
-    if (res.needPin) alert("Open the Documents tab and enter your safe PIN first.");
-    else if (res.error) alert(res.error);
+  async function openAttachment(att) {
+    const res = await openDocById(activeCode, user.uid, att.id);
+    if (res.needPin) {
+      alert(
+        att.priv
+          ? "Open the Documents tab and unlock your private vault first."
+          : "Open the Documents tab and enter the family safe PIN first."
+      );
+    } else if (res.error) alert(res.error);
   }
 
   const upcoming = events
@@ -146,11 +155,23 @@ export default function CalendarPage() {
                   {ev.note && <span className="row-sub">{ev.note}</span>}
                   {ev.attachments?.length > 0 && (
                     <span className="att-row">
-                      {ev.attachments.map((id) => {
-                        const d = docById[id];
+                      {ev.attachments.map((a, idx) => {
+                        const att = typeof a === "string" ? { id: a, priv: false } : a;
+                        const d = docById[att.id];
+                        if (att.priv && !d)
+                          return (
+                            <span key={idx} className="att-chip" title="Private attachment">
+                              🔒 private file
+                            </span>
+                          );
                         if (!d) return null;
                         return (
-                          <button key={id} className="att-chip" onClick={() => openAttachment(id)} title="Open attachment">
+                          <button
+                            key={idx}
+                            className="att-chip"
+                            onClick={() => openAttachment(att)}
+                            title="Open attachment"
+                          >
                             📎 {d.name}
                           </button>
                         );

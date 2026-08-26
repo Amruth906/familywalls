@@ -175,6 +175,13 @@ export const IconNavigation = (p) => (
   </S>
 );
 
+export const IconLock = (p) => (
+  <S {...p}>
+    <rect x="4" y="11" width="16" height="10" rx="3" />
+    <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+  </S>
+);
+
 export const IconFolder = (p) => (
   <S {...p}>
     <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />

@@ -1,19 +1,28 @@
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "./firebase.js";
-import { getDocKey, decryptBuffer, b64ToBuf } from "./crypto.js";
+import { getDocKey, getPrivateDocKey, decryptBuffer, b64ToBuf } from "./crypto.js";
 
 export function getSavedPin(code) {
   return localStorage.getItem(`fh_pin_${code}`);
 }
 
-export async function openDocById(code, docId, mode = "auto") {
+export async function openDocById(code, uid, docId, mode = "auto") {
   try {
-    const snap = await getDoc(doc(db, "families", code, "documents", docId));
+    let snap = await getDoc(doc(db, "families", code, "documents", docId));
+    let isPrivate = false;
+    if (!snap.exists()) {
+      snap = await getDoc(doc(db, "families", code, "privateDocs", uid, "documents", docId));
+      isPrivate = true;
+    }
     if (!snap.exists()) return { error: "File not found." };
     const meta = snap.data();
-    const pin = getSavedPin(code);
-    if (!pin) return { needPin: true };
-    const key = await getDocKey(code, pin);
+    const pin = isPrivate
+      ? localStorage.getItem(`fh_privpin_${code}_${uid}`)
+      : localStorage.getItem(`fh_pin_${code}`);
+    if (!pin) return { needPin: true, private: isPrivate };
+    const key = isPrivate
+      ? await getPrivateDocKey(code, uid, pin)
+      : await getDocKey(code, pin);
     const pt = await decryptBuffer(key, b64ToBuf(meta.data));
     const mime = meta.mime || "application/octet-stream";
     const blob = new Blob([pt], { type: mime });

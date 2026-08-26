@@ -13,6 +13,19 @@ export async function getDocKey(code, pin) {
   );
 }
 
+export async function getPrivateDocKey(code, uid, pin) {
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(pin), "PBKDF2", false, [
+    "deriveKey",
+  ]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: enc.encode(`fh-priv-docs-${code}-${uid}`), iterations: 150000, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
 export async function encryptBuffer(key, buf) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, buf);

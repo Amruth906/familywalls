@@ -1,14 +1,59 @@
-import React, { useMemo, useRef, useState } from "react";
-import { doc, getDoc, setDoc, addDoc, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
+import React, { useMemo, useRef, useState, useEffect } from "react";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  addDoc,
+  deleteDoc,
+  updateDoc,
+  arrayUnion,
+  collection,
+  query,
+  where,
+} from "firebase/firestore";
 import { useApp, famCol } from "../store.jsx";
 import { db } from "../firebase.js";
 import { useCollection } from "../useData.js";
-import { getDocKey, encryptBuffer, makeVerifier, checkVerifier, bufToB64 } from "../crypto.js";
+import {
+  getDocKey,
+  getPrivateDocKey,
+  encryptBuffer,
+  decryptBuffer,
+  makeVerifier,
+  checkVerifier,
+  bufToB64,
+  b64ToBuf,
+} from "../crypto.js";
 import { openDocById } from "../docsUtils.js";
 import Avatar from "../components/Avatar.jsx";
-import { IconPlus, IconX, IconTrash } from "../components/Icons.jsx";
+import { IconPlus, IconX, IconTrash, IconLock } from "../components/Icons.jsx";
 
+const FOLDER_EMOJIS = ["📁", "🪪", "🏥", "🎓", "🚗", "🏠", "💼", "🧾", "✈️", "🐾"];
+const FOLDER_COLORS = ["#ff6b4a", "#4f8cff", "#22b07d", "#9b59f6", "#f2b705", "#e84393", "#00b8d4"];
 const MAX_BYTES = 700 * 1024;
+
+function fmtSize(n) {
+  if (!n) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1048576) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1048576).toFixed(1)} MB`;
+}
+
+function timeAgo(ts) {
+  if (!ts) return "";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return new Date(ts).toLocaleDateString();
+}
+
+function typeIcon(mime, name) {
+  if ((mime || "").startsWith("image/")) return "🖼️";
+  if ((mime || "").includes("pdf") || (name || "").toLowerCase().endsWith(".pdf")) return "📄";
+  return "📎";
+}
 
 async function maybeCompress(file) {
   if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
@@ -36,32 +81,6 @@ async function maybeCompress(file) {
   }
 }
 
-const FOLDER_EMOJIS = ["📁", "🪪", "🏥", "🎓", "🚗", "🏠", "💼", "🧾", "✈️", "🐾"];
-const FOLDER_COLORS = ["#ff6b4a", "#4f8cff", "#22b07d", "#9b59f6", "#f2b705", "#e84393", "#00b8d4"];
-
-function fmtSize(n) {
-  if (!n) return "";
-  if (n < 1024) return `${n} B`;
-  if (n < 1048576) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1048576).toFixed(1)} MB`;
-}
-
-function timeAgo(ts) {
-  if (!ts) return "";
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(ts).toLocaleDateString();
-}
-
-function typeIcon(mime, name) {
-  if ((mime || "").startsWith("image/")) return "🖼️";
-  if ((mime || "").includes("pdf") || (name || "").toLowerCase().endsWith(".pdf")) return "📄";
-  return "📎";
-}
-
 export default function Documents() {
   const { user, activeCode, members } = useApp();
   const [pin, setPinState] = useState(() => localStorage.getItem(`fh_pin_${activeCode}`));
@@ -69,8 +88,20 @@ export default function Documents() {
   const [pinErr, setPinErr] = useState("");
   const [unlocking, setUnlocking] = useState(false);
 
+  const [privPin, setPrivPinState] = useState(
+    () => localStorage.getItem(`fh_privpin_${activeCode}_${user.uid}`) || ""
+  );
+  const [privInput, setPrivInput] = useState("");
+  const [privErr, setPrivErr] = useState("");
+  const [privUnlocking, setPrivUnlocking] = useState(false);
+  const migratedRef = useRef(false);
+
   const { docs: folders } = useCollection(activeCode, "docFolders");
-  const { docs: docs } = useCollection(activeCode, "documents");
+  const { docs: sharedDocs } = useCollection(activeCode, "documents");
+  const { docs: privateDocs } = useCollection(
+    activeCode,
+    `privateDocs/${user.uid}/documents`
+  );
   const { docs: events } = useCollection(activeCode, "events");
 
   const [activeFolder, setActiveFolder] = useState("all");
@@ -80,7 +111,7 @@ export default function Documents() {
   const [showFolderForm, setShowFolderForm] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [uploading, setUploading] = useState(0);
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState("");
   const [msg, setMsg] = useState("");
   const fileRef = useRef(null);
 
@@ -97,6 +128,10 @@ export default function Documents() {
         .slice(0, 15),
     [events]
   );
+
+  useEffect(() => {
+    setPrivPinState(localStorage.getItem(`fh_privpin_${activeCode}_${user.uid}`) || "");
+  }, [activeCode, user.uid]);
 
   async function unlock(e) {
     e.preventDefault();
@@ -126,6 +161,34 @@ export default function Documents() {
     setUnlocking(false);
   }
 
+  async function unlockPrivate(e) {
+    e.preventDefault();
+    if (privInput.trim().length < 4) return setPrivErr("PIN must be at least 4 characters.");
+    setPrivUnlocking(true);
+    setPrivErr("");
+    try {
+      const key = await getPrivateDocKey(activeCode, user.uid, privInput);
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      const v = userSnap.data()?.privateVerifier;
+      if (v) {
+        if (!(await checkVerifier(key, v))) {
+          setPrivErr("Wrong private PIN.");
+          setPrivUnlocking(false);
+          return;
+        }
+      } else {
+        const ver = await makeVerifier(key);
+        await setDoc(doc(db, "users", user.uid), { privateVerifier: ver }, { merge: true });
+      }
+      localStorage.setItem(`fh_privpin_${activeCode}_${user.uid}`, privInput);
+      setPrivPinState(privInput);
+      setPrivInput("");
+    } catch (err) {
+      setPrivErr(err.message || "Could not unlock.");
+    }
+    setPrivUnlocking(false);
+  }
+
   async function addFolder(ev) {
     ev.preventDefault();
     if (!newFolder.trim()) return;
@@ -142,12 +205,13 @@ export default function Documents() {
 
   async function renameFolder(f) {
     const name = prompt("Rename folder:", f.name);
-    if (name && name.trim()) await updateDoc(doc(db, "families", activeCode, "docFolders", f.id), { name: name.trim() });
+    if (name && name.trim())
+      await updateDoc(doc(db, "families", activeCode, "docFolders", f.id), { name: name.trim() });
   }
 
   async function deleteFolder(f) {
     if (!confirm(`Delete folder "${f.name}"? Documents inside move to All files.`)) return;
-    for (const d of docs.filter((x) => x.folderId === f.id)) {
+    for (const d of sharedDocs.filter((x) => x.folderId === f.id)) {
       await updateDoc(doc(db, "families", activeCode, "documents", d.id), { folderId: null });
     }
     await deleteDoc(doc(db, "families", activeCode, "docFolders", f.id));
@@ -157,10 +221,17 @@ export default function Documents() {
   async function uploadFiles(fileList) {
     const files = [...fileList];
     if (!files.length) return;
+    if (isPrivate && !privPin) {
+      setMsg("Set your private PIN first 🔐");
+      setTimeout(() => setMsg(""), 3000);
+      return;
+    }
     setUploading(files.length);
-    let failed = [];
+    const failed = [];
     try {
-      const key = await getDocKey(activeCode, pin);
+      const key = isPrivate
+        ? await getPrivateDocKey(activeCode, user.uid, privPin)
+        : await getDocKey(activeCode, pin);
       for (const file of files) {
         const f = await maybeCompress(file);
         if (f.size > MAX_BYTES) {
@@ -170,24 +241,32 @@ export default function Documents() {
         }
         const plain = await f.arrayBuffer();
         const enc = await encryptBuffer(key, plain);
-        await addDoc(famCol(activeCode, "documents"), {
+        const meta = {
           name: f.name,
           size: f.size,
           mime: f.type || "",
           data: bufToB64(enc),
-          folderId: activeFolder === "all" || activeFolder === "mine" ? null : activeFolder,
-          isPrivate: isPrivate,
           createdBy: user.uid,
           createdAt: Date.now(),
           encrypted: true,
-        });
+        };
+        if (isPrivate) {
+          await addDoc(famCol(activeCode, `privateDocs/${user.uid}/documents`), meta);
+        } else {
+          await addDoc(famCol(activeCode, "documents"), {
+            ...meta,
+            folderId: activeFolder === "all" || activeFolder === "mine" ? null : activeFolder,
+          });
+        }
         setUploading((n) => n - 1);
       }
-      if (failed.length) {
-        setMsg("⚠️ Skipped: " + failed.join(", "));
-      } else {
-        setMsg(isPrivate ? "✓ Uploaded privately (only you can see it)" : "✓ Uploaded & encrypted");
-      }
+      setMsg(
+        failed.length
+          ? "⚠️ Skipped: " + failed.join(", ")
+          : isPrivate
+            ? "✓ Uploaded privately — encrypted with YOUR key, visible only to you"
+            : "✓ Uploaded & encrypted for the family"
+      );
       setTimeout(() => setMsg(""), 4000);
     } catch (err) {
       setMsg("Upload failed: " + (err.message || "try again"));
@@ -195,31 +274,60 @@ export default function Documents() {
     }
   }
 
-  async function removeDoc(d) {
+  async function removeDoc(d, isPrivateDoc) {
     if (!confirm(`Delete "${d.name}" permanently?`)) return;
-    await deleteDoc(doc(db, "families", activeCode, "documents", d.id));
+    if (isPrivateDoc) {
+      await deleteDoc(doc(db, "families", activeCode, "privateDocs", user.uid, "documents", d.id));
+    } else {
+      await deleteDoc(doc(db, "families", activeCode, "documents", d.id));
+    }
   }
 
-  async function togglePrivate(d) {
-    await updateDoc(doc(db, "families", activeCode, "documents", d.id), { isPrivate: !d.isPrivate });
-  }
-
-  async function attachToEvent(docId, eventId) {
+  async function attachToEvent(d, isPrivateDoc, eventId) {
     if (!eventId) return;
     await updateDoc(doc(db, "families", activeCode, "events", eventId), {
-      attachments: arrayUnion(docId),
+      attachments: arrayUnion({ id: d.id, priv: isPrivateDoc }),
     });
     setMsg("✓ Attached to event — see it in Calendar");
     setTimeout(() => setMsg(""), 3000);
   }
 
-  async function handleOpen(d) {
-    const res = await openDocById(activeCode, d.id);
+  async function handleOpen(d, isPrivateDoc) {
+    const res = await openDocById(activeCode, user.uid, d.id);
     if (res.error) {
       setMsg(res.error);
       setTimeout(() => setMsg(""), 3000);
     }
   }
+
+  useEffect(() => {
+    if (!pin || !privPin || migratedRef.current) return;
+    const old = sharedDocs.filter((d) => d.isPrivate && d.createdBy === user.uid);
+    if (!old.length) return;
+    migratedRef.current = true;
+    (async () => {
+      let moved = 0;
+      for (const d of old) {
+        try {
+          const famKey = await getDocKey(activeCode, pin);
+          const pt = await decryptBuffer(famKey, b64ToBuf(d.data));
+          const pKey = await getPrivateDocKey(activeCode, user.uid, privPin);
+          const enc = await encryptBuffer(pKey, pt);
+          const { isPrivate, folderId, path, ...meta } = d;
+          await addDoc(famCol(activeCode, `privateDocs/${user.uid}/documents`), {
+            ...meta,
+            data: bufToB64(enc),
+          });
+          await deleteDoc(doc(db, "families", activeCode, "documents", d.id));
+          moved++;
+        } catch {}
+      }
+      if (moved) {
+        setMsg(`🔒 Moved ${moved} old private file(s) into your personal vault`);
+        setTimeout(() => setMsg(""), 4000);
+      }
+    })();
+  }, [pin, privPin, sharedDocs, activeCode, user.uid]);
 
   if (!pin) {
     return (
@@ -230,14 +338,13 @@ export default function Documents() {
           <h3>Your family Document Safe</h3>
           <p className="muted small">
             Files are <b>encrypted in your browser</b> with a secret PIN before upload — even Firebase can't
-            read them. <b>Share the same PIN with your family</b> so everyone can open shared files. Private
-            files stay visible only to you. Max ~700 KB per file (photos are auto-compressed).
+            read them. <b>Share the same PIN with your family</b> so everyone can open shared files.
           </p>
           <input
             type="password"
             inputMode="numeric"
             autoFocus
-            placeholder="Create/enter safe PIN (min 4)"
+            placeholder="Family safe PIN (min 4)"
             value={pinInput}
             onChange={(e) => setPinInput(e.target.value)}
           />
@@ -250,24 +357,99 @@ export default function Documents() {
     );
   }
 
-  const visible = docs.filter((d) => !d.isPrivate || d.createdBy === user.uid);
-  const filtered = visible
-    .filter((d) => {
-      if (activeFolder === "mine") return d.isPrivate && d.createdBy === user.uid;
-      if (activeFolder === "all") return true;
-      return d.folderId === activeFolder;
-    })
-    .filter((d) => !query || (d.name || "").toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const sharedVisible = sharedDocs.filter(
+    (d) => !query || (d.name || "").toLowerCase().includes(query.toLowerCase())
+  );
+  const privateVisible = privateDocs.filter(
+    (d) => !query || (d.name || "").toLowerCase().includes(query.toLowerCase())
+  );
 
-  const recent = [...visible].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 5);
+  let listRows = [];
+  let listTitle = "";
+  if (activeFolder === "mine") {
+    listRows = privateVisible.map((d) => ({ ...d, isPrivateDoc: true }));
+    listTitle = `🔒 Private vault · ${listRows.length}`;
+  } else if (activeFolder === "all") {
+    listRows = [
+      ...sharedVisible.map((d) => ({ ...d, isPrivateDoc: false })),
+      ...privateVisible.map((d) => ({ ...d, isPrivateDoc: true })),
+    ].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    listTitle = `All files · ${listRows.length}`;
+  } else {
+    listRows = sharedVisible
+      .filter((d) => d.folderId === activeFolder)
+      .map((d) => ({ ...d, isPrivateDoc: false }));
+    const f = folders.find((x) => x.id === activeFolder);
+    listTitle = `${f ? f.emoji + " " + f.name : "Folder"} · ${listRows.length}`;
+  }
+
+  const recent = [...listRows].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 5);
+
+  function DocRow({ d }) {
+    const m = memberById[d.createdBy];
+    const isMine = d.createdBy === user.uid;
+    return (
+      <li className="doc-row">
+        <span className="doc-icon">{typeIcon(d.mime, d.name)}</span>
+        <div className="row-body">
+          <span className="row-title">
+            {d.name}
+            {d.isPrivateDoc && <span className="you-tag">🔒 private</span>}
+          </span>
+          <span className="row-sub">
+            {fmtSize(d.size)} · <span className="dot" style={{ background: m?.color || "#ccc" }} />
+            {m?.name.split(" ")[0] || "—"} · {timeAgo(d.createdAt)}
+          </span>
+          {isMine && (
+            <span className="doc-actions">
+              <button className="linklike" onClick={() => handleOpen(d, d.isPrivateDoc)}>
+                Open
+              </button>
+              <select
+                className="attach-select"
+                value=""
+                onChange={(e) => attachToEvent(d, d.isPrivateDoc, e.target.value)}
+                title="Attach to a calendar event"
+              >
+                <option value="">📎 Attach to event…</option>
+                {upcomingEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title} ({ev.date})
+                  </option>
+                ))}
+              </select>
+            </span>
+          )}
+        </div>
+        {isMine && (
+          <button
+            className="icon-btn danger"
+            title="Delete"
+            onClick={() => removeDoc(d, d.isPrivateDoc)}
+          >
+            <IconTrash size={15} />
+          </button>
+        )}
+        {!isMine && (
+          <button className="btn tiny" onClick={() => handleOpen(d, false)}>
+            Open
+          </button>
+        )}
+      </li>
+    );
+  }
 
   return (
     <div className="page">
       <h2 className="page-title">Documents 🔐</h2>
 
       <div className="doc-toolbar">
-        <input className="grow" placeholder="Search files…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input
+          className="grow"
+          placeholder="Search files…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <label className="btn primary upload-btn">
           <IconPlus size={16} /> Upload
           <input
@@ -285,10 +467,35 @@ export default function Documents() {
 
       <label className="priv-toggle">
         <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-        🔒 Upload as private (only I can see it)
+        🔒 Upload as private — encrypted with YOUR pin, only you ever see it
       </label>
 
-      {uploading > 0 && <div className="transfer-msg">Encrypting & uploading… {uploading} file(s) left</div>}
+      {isPrivate && !privPin && (
+        <form className="panel priv-pin-form" onSubmit={unlockPrivate}>
+          <h4>
+            <IconLock size={16} /> Set your personal private PIN
+          </h4>
+          <p className="muted small">
+            Private files use <b>your own secret PIN</b> — different from the family PIN. Nobody else can
+            open them, not even with the family PIN. Don't lose it!
+          </p>
+          <input
+            type="password"
+            inputMode="numeric"
+            placeholder="Your private PIN (min 4)"
+            value={privInput}
+            onChange={(e) => setPrivInput(e.target.value)}
+          />
+          {privErr && <div className="error">{privErr}</div>}
+          <button className="btn primary" disabled={privUnlocking}>
+            {privUnlocking ? "Saving…" : "Save private PIN"}
+          </button>
+        </form>
+      )}
+
+      {uploading > 0 && (
+        <div className="transfer-msg">Encrypting & uploading… {uploading} file(s) left</div>
+      )}
       {msg && <div className="transfer-msg">{msg}</div>}
 
       <div className="folder-chips">
@@ -321,17 +528,33 @@ export default function Documents() {
 
       {showFolderForm && (
         <form className="panel folder-form" onSubmit={addFolder}>
-          <input className="grow" placeholder="Folder name… e.g. Aadhaar & IDs" value={newFolder} onChange={(e) => setNewFolder(e.target.value)} />
+          <input
+            className="grow"
+            placeholder="Folder name… e.g. Aadhaar & IDs"
+            value={newFolder}
+            onChange={(e) => setNewFolder(e.target.value)}
+          />
           <div className="emoji-row">
             {FOLDER_EMOJIS.map((e) => (
-              <button type="button" key={e} className={"emoji" + (fEmoji === e ? " on" : "")} onClick={() => setFEmoji(e)}>
+              <button
+                type="button"
+                key={e}
+                className={"emoji" + (fEmoji === e ? " on" : "")}
+                onClick={() => setFEmoji(e)}
+              >
                 {e}
               </button>
             ))}
           </div>
           <div className="swatches">
             {FOLDER_COLORS.map((c) => (
-              <button type="button" key={c} className={"swatch" + (fColor === c ? " on" : "")} style={{ background: c }} onClick={() => setFColor(c)} />
+              <button
+                type="button"
+                key={c}
+                className={"swatch" + (fColor === c ? " on" : "")}
+                style={{ background: c }}
+                onClick={() => setFColor(c)}
+              />
             ))}
           </div>
           <button className="btn primary">Create folder</button>
@@ -340,65 +563,13 @@ export default function Documents() {
 
       <section className="panel">
         <header className="panel-head">
-          <h3>
-            {filtered.length} file{filtered.length === 1 ? "" : "s"}
-          </h3>
+          <h3>{listTitle}</h3>
         </header>
         <ul className="row-list">
-          {filtered.map((d) => {
-            const m = memberById[d.createdBy];
-            return (
-              <li key={d.id} className="doc-row">
-                <span className="doc-icon">{typeIcon(d.mime, d.name)}</span>
-                <div className="row-body">
-                  <span className="row-title">
-                    {d.name}
-                    {d.isPrivate && <span className="you-tag">🔒 private</span>}
-                  </span>
-                  <span className="row-sub">
-                    {fmtSize(d.size)} · <span className="dot" style={{ background: m?.color || "#ccc" }} />
-                    {m?.name.split(" ")[0] || "—"} · {timeAgo(d.createdAt)}
-                  </span>
-                  {d.createdBy === user.uid && (
-                    <span className="doc-actions">
-                      <button className="linklike" onClick={() => handleOpen(d)}>
-                        Open
-                      </button>
-                      <select
-                        className="attach-select"
-                        value=""
-                        onChange={(e) => attachToEvent(d.id, e.target.value)}
-                        title="Attach to a calendar event"
-                      >
-                        <option value="">📎 Attach to event…</option>
-                        {upcomingEvents.map((ev) => (
-                          <option key={ev.id} value={ev.id}>
-                            {ev.title} ({ev.date})
-                          </option>
-                        ))}
-                      </select>
-                    </span>
-                  )}
-                </div>
-                {d.createdBy === user.uid && (
-                  <>
-                    <button className="icon-btn" title={d.isPrivate ? "Make shared" : "Make private"} onClick={() => togglePrivate(d)}>
-                      {d.isPrivate ? "🔓" : "🔒"}
-                    </button>
-                    <button className="icon-btn danger" title="Delete" onClick={() => removeDoc(d)}>
-                      <IconTrash size={15} />
-                    </button>
-                  </>
-                )}
-                {d.createdBy !== user.uid && (
-                  <button className="btn tiny" onClick={() => handleOpen(d)}>
-                    Open
-                  </button>
-                )}
-              </li>
-            );
-          })}
-          {!filtered.length && (
+          {listRows.map((d) => (
+            <DocRow key={d.id} d={d} />
+          ))}
+          {!listRows.length && (
             <p className="empty">No files here yet — hit Upload. Files are encrypted before they leave this device.</p>
           )}
         </ul>
@@ -417,6 +588,7 @@ export default function Documents() {
                 <div className="row-body">
                   <span className="row-title">
                     <b>{m?.name.split(" ")[0] || "Someone"}</b> added {typeIcon(d.mime, d.name)} {d.name}
+                    {d.isPrivateDoc && <span className="you-tag">🔒 private</span>}
                   </span>
                   <span className="row-sub">{timeAgo(d.createdAt)}</span>
                 </div>
