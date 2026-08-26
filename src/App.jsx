@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./store.jsx";
 import { isConfigured } from "./firebase.js";
 import { onDbError } from "./dbError.js";
-import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy, IconWallet, IconMeal, IconFolder } from "./components/Icons.jsx";
+import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy, IconWallet, IconMeal, IconFolder, IconMap } from "./components/Icons.jsx";
 import LoginScreen from "./pages/LoginScreen.jsx";
 import FamilySetup from "./pages/FamilySetup.jsx";
 import Home from "./pages/Home.jsx";
@@ -11,6 +11,7 @@ import ListsPage from "./pages/ListsPage.jsx";
 import Budget from "./pages/Budget.jsx";
 import MealPlanner from "./pages/MealPlanner.jsx";
 import Documents from "./pages/Documents.jsx";
+import MapPage from "./pages/MapPage.jsx";
 import CalendarPage from "./pages/CalendarPage.jsx";
 import Members from "./pages/Members.jsx";
 import Avatar from "./components/Avatar.jsx";
@@ -23,11 +24,12 @@ const NAV = [
   { id: "budget", label: "Budget", Icon: IconWallet },
   { id: "meals", label: "Meals", Icon: IconMeal },
   { id: "docs", label: "Docs", Icon: IconFolder },
+  { id: "map", label: "Map", Icon: IconMap },
   { id: "calendar", label: "Calendar", Icon: IconCalendar },
   { id: "members", label: "Family", Icon: IconUsers },
 ];
 
-export const VERSION = "1.8.1";
+export const VERSION = "1.9.0";
 
 function Splash() {
   return (
@@ -148,6 +150,7 @@ function Shell() {
             {tab === "budget" && <Budget />}
             {tab === "meals" && <MealPlanner />}
             {tab === "docs" && <Documents />}
+            {tab === "map" && <MapPage />}
             {tab === "calendar" && <CalendarPage />}
             {tab === "members" && <Members />}
           </div>

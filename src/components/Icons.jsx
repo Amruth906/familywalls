@@ -148,6 +148,18 @@ export const IconSearch = (p) => (
   </S>
 );
 
+export const IconMap = (p) => (
+  <S {...p}>
+    <path d="m9 20-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13 6-3m-6 3V7m6 10 4.553 2.276A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7" />
+  </S>
+);
+
+export const IconNavigation = (p) => (
+  <S {...p}>
+    <path d="m3 11 18-8-8 18-2.5-7.5L3 11Z" />
+  </S>
+);
+
 export const IconFolder = (p) => (
   <S {...p}>
     <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
