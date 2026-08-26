@@ -7,7 +7,7 @@ import Avatar from "../components/Avatar.jsx";
 import { IconCopy, IconLink, IconCheck, IconLogout, IconUsers, IconX } from "../components/Icons.jsx";
 
 export default function Members() {
-  const { user, activeCode, members, me, familyName, familyCreatedBy, leaveFamily, signOut, approveJoinRequest, rejectJoinRequest } = useApp();
+  const { user, activeCode, members, me, familyName, familyCreatedBy, leaveFamily, signOut, approveJoinRequest, rejectJoinRequest, removeMember } = useApp();
   const { docs: joinRequests } = useCollection(activeCode, "joinRequests");
   const isCreator = familyCreatedBy === user.uid;
   const [copied, setCopied] = useState("");
@@ -127,6 +127,23 @@ export default function Members() {
                 </span>
                 {m.id === me?.id && <span className="row-sub">Signed in on this device</span>}
               </div>
+              {isCreator && m.id !== user.uid && (
+                <button
+                  className="icon-btn danger"
+                  title="Remove from family"
+                  onClick={async () => {
+                    if (confirm(`Remove ${m.name} from the family? They will lose access immediately.`)) {
+                      try {
+                        await removeMember(m.id);
+                      } catch (e) {
+                        alert("Couldn't remove: " + (e.message || e));
+                      }
+                    }
+                  }}
+                >
+                  <IconX size={15} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

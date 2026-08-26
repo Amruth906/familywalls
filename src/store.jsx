@@ -149,9 +149,24 @@ export function AppProvider({ children }) {
     const unsubMembers = onSnapshot(
       collection(db, "families", code, "members"),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((m) => !m.removed);
         list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
         setMembers(list);
+        if (user && families.includes(code) && !list.some((m) => m.id === user.uid)) {
+          sessionStorage.setItem("fh_kicked", "1");
+          setDoc(
+            doc(db, "users", user.uid),
+            { [`families.${code}`]: deleteField() },
+            { merge: true }
+          )
+            .catch(() => {})
+            .then(() => {
+              setActiveCode(null);
+              localStorage.removeItem("fh_active_code");
+            });
+        }
       },
       (e) => setDbError(friendly(e))
     );
@@ -301,6 +316,10 @@ export function AppProvider({ children }) {
     await deleteDoc(doc(db, "families", activeCode, "joinRequests", r.uid));
   }
 
+  async function removeMember(memberId) {
+    await deleteDoc(doc(db, "families", activeCode, "members", memberId));
+  }
+
   async function leaveFamily() {
     if (!activeCode) return;
     await deleteDoc(doc(db, "families", activeCode, "members", user.uid)).catch(() => {});
@@ -332,6 +351,7 @@ export function AppProvider({ children }) {
     cancelJoinRequest,
     approveJoinRequest,
     rejectJoinRequest,
+    removeMember,
     leaveFamily,
     setActiveCode,
   };

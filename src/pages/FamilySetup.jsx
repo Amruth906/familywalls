@@ -8,6 +8,11 @@ import { resetAppData } from "../firebase.js";
 
 export default function FamilySetup() {
   const { user, families, createFamily, requestJoin, cancelJoinRequest, signOut } = useApp();
+  const [kicked] = useState(() => {
+    const v = sessionStorage.getItem("fh_kicked");
+    if (v) sessionStorage.removeItem("fh_kicked");
+    return !!v;
+  });
   const [mode, setMode] = useState("create");
   const [famName, setFamName] = useState("");
   const [code, setCode] = useState("");
@@ -189,6 +194,12 @@ export default function FamilySetup() {
             <IconLink size={16} /> Join
           </button>
         </div>
+
+        {kicked && (
+          <div className="error" style={{ marginBottom: 4 }}>
+            You were removed from the family by its creator.
+          </div>
+        )}
 
         <form onSubmit={submit} className="setup-form">
           {mode === "create" ? (
