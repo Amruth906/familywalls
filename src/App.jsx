@@ -2,12 +2,13 @@ import React, { useEffect, useState } from "react";
 import { AppProvider, useApp } from "./store.jsx";
 import { isConfigured } from "./firebase.js";
 import { onDbError } from "./dbError.js";
-import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy } from "./components/Icons.jsx";
+import { Logo, IconHome, IconCheckSquare, IconCart, IconCalendar, IconUsers, IconLogout, IconCopy, IconWallet } from "./components/Icons.jsx";
 import LoginScreen from "./pages/LoginScreen.jsx";
 import FamilySetup from "./pages/FamilySetup.jsx";
 import Home from "./pages/Home.jsx";
 import Todos from "./pages/Todos.jsx";
 import ListsPage from "./pages/ListsPage.jsx";
+import Budget from "./pages/Budget.jsx";
 import CalendarPage from "./pages/CalendarPage.jsx";
 import Members from "./pages/Members.jsx";
 import Avatar from "./components/Avatar.jsx";
@@ -17,11 +18,12 @@ const NAV = [
   { id: "home", label: "Home", Icon: IconHome },
   { id: "todos", label: "To-Dos", Icon: IconCheckSquare },
   { id: "lists", label: "Lists", Icon: IconCart },
+  { id: "budget", label: "Budget", Icon: IconWallet },
   { id: "calendar", label: "Calendar", Icon: IconCalendar },
   { id: "members", label: "Family", Icon: IconUsers },
 ];
 
-export const VERSION = "1.4.1";
+export const VERSION = "1.6.0";
 
 function Splash() {
   return (
@@ -139,6 +141,7 @@ function Shell() {
             {tab === "home" && <Home goto={setTab} />}
             {tab === "todos" && <Todos />}
             {tab === "lists" && <ListsPage />}
+            {tab === "budget" && <Budget />}
             {tab === "calendar" && <CalendarPage />}
             {tab === "members" && <Members />}
           </div>
