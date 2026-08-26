@@ -76,6 +76,7 @@ export function AppProvider({ children }) {
   const [members, setMembers] = useState([]);
 
   useEffect(() => {
+    let unsubProfile = null;
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (unsubProfile) {
         unsubProfile();
