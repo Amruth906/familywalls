@@ -1,11 +1,77 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
     match /users/{uid} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
-    match /families/{familyCode}/{document=**} {
-      allow read, write: if request.auth != null;
+
+    match /families/{code} {
+      function owner() {
+        return request.auth != null &&
+          get(/databases/$(database)/documents/families/$(code)).data.createdBy == request.auth.uid;
+      }
+      function member() {
+        return request.auth != null &&
+          exists(/databases/$(database)/documents/families/$(code)/members/$(request.auth.uid));
+      }
+
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if owner() || member();
+
+      match /joinRequests/{reqId} {
+        allow read: if request.auth != null && (request.auth.uid == reqId || owner());
+        allow create: if request.auth != null && request.auth.uid == reqId;
+        allow update, delete: if request.auth != null && (request.auth.uid == reqId || owner());
+      }
+
+      match /members/{memberId} {
+        allow read: if request.auth != null;
+        allow create, update: if owner();
+        allow delete: if owner() || (request.auth.uid == memberId && member());
+      }
+
+      match /todos/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /lists/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /lists/{listId}/items/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /budget/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /budgetLimits/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /budgetReminders/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /meals/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /events/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /locations/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /docFolders/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /documents/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /chats/{id} {
+        allow read, write: if owner() || member();
+      }
+      match /chats/{chatId}/messages/{id} {
+        allow read, write: if owner() || member();
+      }
     }
   }
 }

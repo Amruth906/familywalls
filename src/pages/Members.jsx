@@ -1,7 +1,10 @@
 import React, { useState } from "react";
-import { useApp } from "../store.jsx";
+import { doc, setDoc, deleteDoc } from "firebase/firestore";
+import { useApp, colorForUid } from "../store.jsx";
+import { db } from "../firebase.js";
+import { useCollection } from "../useData.js";
 import Avatar from "../components/Avatar.jsx";
-import { IconCopy, IconLink, IconCheck, IconLogout, IconUsers } from "../components/Icons.jsx";
+import { IconCopy, IconLink, IconCheck, IconLogout, IconUsers, IconX } from "../components/Icons.jsx";
 
 export default function Members() {
   const { user, activeCode, members, me, familyName, leaveFamily, signOut } = useApp();
@@ -54,6 +57,36 @@ export default function Members() {
           </button>
         </div>
       </div>
+
+      {isCreator && (
+        <section className="panel">
+          <header className="panel-head">
+            <h3>
+              🔔 Join requests {joinRequests.length > 0 && <span className="count-pill">{joinRequests.length}</span>}
+            </h3>
+          </header>
+          <ul className="row-list">
+            {joinRequests.map((r) => (
+              <li key={r.uid}>
+                <Avatar src={r.photoURL} name={r.name} color={colorForUid(r.uid)} size={38} />
+                <div className="row-body">
+                  <span className="row-title">
+                    <b>{r.name}</b> wants to join your family
+                  </span>
+                  <span className="row-sub">Approving gives them full access</span>
+                </div>
+                <button className="btn tiny primary" onClick={() => approveJoinRequest(r)}>
+                  <IconCheck size={14} /> Accept
+                </button>
+                <button className="icon-btn danger" title="Reject" onClick={() => rejectJoinRequest(r)}>
+                  <IconX size={15} />
+                </button>
+              </li>
+            ))}
+            {!joinRequests.length && <p className="empty">No pending requests. Share your code above 👆</p>}
+          </ul>
+        </section>
+      )}
 
       <section className="panel">
         <header className="panel-head">

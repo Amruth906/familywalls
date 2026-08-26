@@ -71,6 +71,7 @@ export function AppProvider({ children }) {
     () => localStorage.getItem("fh_active_code") || null
   );
   const [familyName, setFamilyName] = useState("");
+  const [familyCreatedBy, setFamilyCreatedBy] = useState(null);
   const [members, setMembers] = useState([]);
 
   useEffect(() => {
@@ -139,7 +140,10 @@ export function AppProvider({ children }) {
     localStorage.setItem("fh_active_code", code);
     const unsubFam = onSnapshot(
       doc(db, "families", code),
-      (snap) => setFamilyName(snap.exists() ? snap.data().name : ""),
+      (snap) => {
+        setFamilyName(snap.exists() ? snap.data().name : "");
+        setFamilyCreatedBy(snap.exists() ? snap.data().createdBy || null : null);
+      },
       (e) => setDbError(friendly(e))
     );
     const unsubMembers = onSnapshot(
@@ -148,19 +152,6 @@ export function AppProvider({ children }) {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         list.sort((a, b) => (a.joinedAt || 0) - (b.joinedAt || 0));
         setMembers(list);
-        const mine = list.find((m) => m.id === user.uid);
-        if (!mine) {
-          setDoc(
-            doc(db, "families", code, "members", user.uid),
-            {
-              name: user.displayName || "Member",
-              photoURL: user.photoURL || null,
-              color: colorForUid(user.uid),
-              joinedAt: Date.now(),
-            },
-            { merge: true }
-          ).catch((e) => setDbError(friendly(e)));
-        }
       },
       (e) => setDbError(friendly(e))
     );
@@ -253,49 +244,46 @@ export function AppProvider({ children }) {
     return c;
   }
 
-  async function joinFamily(code, onStep = () => {}) {
+  async function requestJoin(code) {
     const c = normalizeCode(code);
     const famRef = doc(db, "families", c);
-    onStep("Looking up the family…");
     let snap;
     try {
-      snap = await withTimeout(
-        getDoc(famRef),
-        15000,
-        NET_TIMEOUT_MSG
-      );
+      snap = await withTimeout(getDoc(famRef), 12000, NET_TIMEOUT_MSG);
     } catch (e) {
       throw new Error(friendly(e));
     }
     if (!snap.exists()) throw new Error("No family found with that code.");
-    console.info("[FamilyHub] joining family", c);
-    onStep("Adding your profile…");
-    try {
-      await withTimeout(
-        setDoc(
-          doc(db, "families", c, "members", user.uid),
-          {
-            name: user.displayName || "Member",
-            photoURL: user.photoURL || null,
-            color: colorForUid(user.uid),
-            joinedAt: Date.now(),
-          },
-          { merge: true }
-        ),
-        12000,
-        NET_TIMEOUT_MSG
-      );
-    } catch (e) {
-      throw new Error(friendly(e));
-    }
-    await withTimeout(
-      setDoc(doc(db, "users", user.uid), { [`families.${c}`]: true }, { merge: true }),
-      12000,
-      NET_TIMEOUT_MSG
-    );
-    console.info("[FamilyHub] profile updated — entering family");
-    onStep("");
-    setActiveCode(c);
+    if (snap.data().createdBy === user.uid)
+      throw new Error("That's your own family — open it from the sidebar.");
+    await setDoc(doc(db, "families", c, "joinRequests", user.uid), {
+      uid: user.uid,
+      name: user.displayName || "Member",
+      photoURL: user.photoURL || null,
+      createdAt: Date.now(),
+    });
+  }
+
+  async function cancelJoinRequest(code) {
+    const c = normalizeCode(code);
+    await deleteDoc(doc(db, "families", c, "joinRequests", user.uid)).catch(() => {});
+    localStorage.removeItem("fh_requested_code");
+  }
+
+  async function approveJoinRequest(r) {
+    await setDoc(doc(db, "families", activeCode, "members", r.uid), {
+      name: r.name || "Member",
+      photoURL: r.photoURL || null,
+      color: colorForUid(r.uid),
+      joinedAt: Date.now(),
+    });
+    await updateDoc(doc(db, "families", activeCode, "joinRequests", r.uid), {
+      status: "approved",
+    });
+  }
+
+  async function rejectJoinRequest(r) {
+    await deleteDoc(doc(db, "families", activeCode, "joinRequests", r.uid));
   }
 
   async function leaveFamily() {
@@ -319,12 +307,16 @@ export function AppProvider({ children }) {
     families: families || [],
     activeCode,
     familyName,
+    familyCreatedBy,
     members,
     me,
     signInWithGoogle,
     signOut,
     createFamily,
-    joinFamily,
+    requestJoin,
+    cancelJoinRequest,
+    approveJoinRequest,
+    rejectJoinRequest,
     leaveFamily,
     setActiveCode,
   };

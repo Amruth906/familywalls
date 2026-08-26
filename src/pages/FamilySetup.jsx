@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useApp } from "../store.jsx";
-import { getDoc, doc } from "firebase/firestore";
+import { doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase.js";
-import { Logo, IconArrowLeft, IconSparkles, IconLink, IconCheck } from "../components/Icons.jsx";
+import { Logo, IconArrowLeft, IconSparkles, IconLink, IconCheck, IconX } from "../components/Icons.jsx";
 import { VERSION } from "../App.jsx";
 import { resetAppData } from "../firebase.js";
 
 export default function FamilySetup() {
-  const { user, createFamily, joinFamily, signOut } = useApp();
+  const { user, families, createFamily, requestJoin, cancelJoinRequest, signOut } = useApp();
   const [mode, setMode] = useState("create");
   const [famName, setFamName] = useState("");
   const [code, setCode] = useState("");
@@ -18,8 +18,34 @@ export default function FamilySetup() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [step, setStep] = useState("");
+  const [requestedCode, setRequestedCode] = useState(
+    () => localStorage.getItem("fh_requested_code") || ""
+  );
+  const [rejected, setRejected] = useState(false);
   const timer = useRef(null);
+
+  useEffect(() => {
+    if (!requestedCode) return;
+    const ref = doc(db, "families", requestedCode, "joinRequests", user.uid);
+    const unsub = onSnapshot(ref, async (snap) => {
+      if (!snap.exists()) {
+        setTimeout(() => {
+          if (!families.includes(requestedCode)) setRejected(true);
+        }, 2000);
+        return;
+      }
+      if (snap.data().status === "approved") {
+        await setDoc(
+          doc(db, "users", user.uid),
+          { [`families.${requestedCode}`]: true },
+          { merge: true }
+        );
+        localStorage.removeItem("fh_requested_code");
+        setRequestedCode("");
+      }
+    });
+    return unsub;
+  }, [requestedCode, user.uid]);
 
   useEffect(() => {
     setAvail(null);
@@ -42,16 +68,75 @@ export default function FamilySetup() {
     e.preventDefault();
     setError("");
     setBusy(true);
-    setStep("");
     try {
-      if (mode === "create") await createFamily(famName, code, setStep);
-      else await joinFamily(joinCode, setStep);
+      if (mode === "create") await createFamily(famName, code);
+      else {
+        const c = joinCode.trim().toUpperCase();
+        await requestJoin(c);
+        localStorage.setItem("fh_requested_code", c);
+        setRequestedCode(c);
+      }
     } catch (err) {
       setError(err.message || "Something went wrong.");
       setBusy(false);
       setAvail(null);
-      setStep("");
     }
+  }
+
+  async function cancelRequest() {
+    await cancelJoinRequest(requestedCode);
+    setRequestedCode("");
+    setRejected(false);
+    setMode("join");
+    setJoinCode("");
+  }
+
+  if (requestedCode) {
+    return (
+      <div className="auth-bg">
+        <div className="blob blob-a" />
+        <div className="blob blob-b" />
+        <div className="setup-card">
+          <div className="setup-head">
+            <Logo size={34} />
+            <div>
+              <h2>{rejected ? "Request not approved" : "Waiting for approval ⏳"}</h2>
+              <p className="muted">
+                {rejected
+                  ? "The creator of this family didn't accept your request."
+                  : `Your request to join family ${requestedCode} was sent to its creator.`}
+              </p>
+            </div>
+          </div>
+          {rejected ? (
+            <>
+              <button
+                className="btn primary big"
+                onClick={() => {
+                  setRequestedCode("");
+                  setRejected(false);
+                  setMode("join");
+                  setJoinCode("");
+                }}
+              >
+                Try another code
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="muted small">
+                You'll jump straight into the family the moment they accept. You can safely close this
+                page and come back later.
+              </p>
+              <button className="btn big" onClick={cancelRequest}>
+                <IconX size={16} /> Cancel request
+              </button>
+            </>
+          )}
+          <p className="ver">v{VERSION}</p>
+        </div>
+      </div>
+    );
   }
 
   const codeOk = /^[A-Za-z0-9-]{3,16}$/.test(code.trim());
@@ -126,17 +211,22 @@ export default function FamilySetup() {
               </div>
             </>
           ) : (
-            <label className="field">
-              Family code
-              <input
-                autoFocus
-                className="code-input"
-                placeholder="ABC-123"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/\s/g, ""))}
-                maxLength={16}
-              />
-            </label>
+            <>
+              <label className="field">
+                Family code
+                <input
+                  autoFocus
+                  className="code-input"
+                  placeholder="ABC-123"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/\s/g, ""))}
+                  maxLength={16}
+                />
+              </label>
+              <p className="muted small">
+                The family creator will see your request and needs to approve it before you're in.
+              </p>
+            </>
           )}
 
           {error && <div className="error">{error}</div>}
@@ -148,10 +238,12 @@ export default function FamilySetup() {
               (mode === "create" ? !codeOk || !famName.trim() || avail === "taken" : joinCode.trim().length < 3)
             }
           >
-            {busy ? "Please wait…" : mode === "create" ? "Create family wall" : "Join family"}
+            {busy
+              ? "Please wait…"
+              : mode === "create"
+                ? "Create family wall"
+                : "Send join request"}
           </button>
-
-          {step && <div className="step-line">{step}</div>}
         </form>
 
         <button className="back" onClick={() => setMode(mode === "create" ? "join" : "create")}>
