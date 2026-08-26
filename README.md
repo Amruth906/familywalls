@@ -1,6 +1,6 @@
 # 🏠 FamilyHub
 
-A free FamilyWall-style app for your family — **Google sign-in, to-dos, shared lists, calendar/dates**, all synced in real time on everyone's phones.
+A free FamilyWall-style app for your family — **Google sign-in, to-dos, shared lists, budget, meal planner, encrypted documents, map, end-to-end encrypted chat, calendar**, all synced in real time on everyone's phones.
 
 Built with **React + Vite + Firebase (free tier)** and deployed on **Netlify**.
 
@@ -8,13 +8,18 @@ Built with **React + Vite + Firebase (free tier)** and deployed on **Netlify**.
 
 ## ✨ Features
 
-- 🔐 **Login with Google** — each family member has their own secure account
-- 🧾 **Your own family code** — you choose it when you create your family
-- ⚡ **Stay logged in** — open the app and you're straight into your family wall
-- ✅ **To-Dos** — assign to family members, due dates, overdue highlights
-- 🛒 **Lists** — groceries, packing, wishlists with check-off items
-- 📅 **Calendar** — month view, events with time & person colors
-- 👨‍👩‍👧‍👦 **Family** — invite code/link, Google avatars, multiple families supported
+| Module | Highlights |
+|---|---|
+| 🔐 Auth | Google sign-in · custom family code you choose · stays logged in |
+| 👑 Creator role | Approve/reject join requests · remove members (admin-style) |
+| ✅ To-Dos | Assign to members, due dates, overdue highlights, per-member filters |
+| 🛒 Lists | Multiple lists, check-off items |
+| 💰 Budget | Income/expense tracker, monthly limits with alerts, bill reminders ("Paid ✓"), 6-month analytics, top spenders |
+| 🍱 Meal Planner | Weekly grid (breakfast/lunch/dinner/snacks), ingredients → shopping list in one tap, web recipe import |
+| 🔐 Documents | Browser-encrypted vault (AES-256), shared + **truly private** files, folders with emoji/colors, event attachments |
+| 🗺️ Map | Live location sharing with duration control, place arrival/left alerts, one-tap directions |
+| 💬 Chat | **End-to-end encrypted** group + private chats, emoji, GIFs, read receipts (✓✓) |
+| 📅 Calendar | Month view, events with time & member colors |
 
 ---
 
@@ -25,19 +30,15 @@ Built with **React + Vite + Firebase (free tier)** and deployed on **Netlify**.
 Your config is already pasted into `src/firebase.js`. Still needed in the Firebase console:
 
 1. **Enable Google sign-in**
-   Firebase console → **Build → Authentication → Get started → Sign-in method** tab
-   → **Add new provider → Google → Enable → Save**
+   **Build → Authentication → Get started → Sign-in method** → Add provider → **Google** → Enable → Save
 2. **Authorize your website domain**
-   **Authentication → Settings → Authorized domains → Add domain**
-   → add your Netlify domain, e.g. `familywalls.netlify.app`
-   (localhost is already allowed for testing)
+   **Authentication → Settings → Authorized domains → Add domain** → add your Netlify domain (e.g. `familywalls.netlify.app`)
 3. **Create the database**
-   **Build → Firestore Database → Create database → Start in production mode** → pick a location → **Enable**
+   **Build → Firestore Database → Create database → Start in production mode** → pick a location → Enable
 4. **Publish security rules**
-   In Firestore → **Rules** tab → paste the contents of [`firestore.rules`](firestore.rules) → **Publish**
-5. **Documents vault — no extra setup needed**
-   Encrypted files are stored directly in Firestore (free 1GB). Max ~700 KB per
-   file; photos are auto-compressed in the browser before upload.
+   Firestore → **Rules** tab → paste contents of [`firestore.rules`](firestore.rules) → **Publish**
+
+> No Storage/billing needed — documents are stored encrypted inside Firestore itself.
 
 ### Part 2 — Run locally (optional)
 
@@ -45,8 +46,6 @@ Your config is already pasted into `src/firebase.js`. Still needed in the Fireba
 npm install
 npm run dev
 ```
-
-Open http://localhost:5173 → **Continue with Google** → create your family with a custom code.
 
 ### Part 3 — GitHub
 
@@ -62,37 +61,67 @@ git push -u origin main
 ### Part 4 — Netlify (free)
 
 1. https://app.netlify.com → **Add new site → Import an existing project → GitHub**
-2. Pick your repo → **Deploy** (build settings come from `netlify.toml`)
-3. Copy your site URL (e.g. `https://familywalls.netlify.app`) → add it to Firebase authorized domains (Part 1, step 2)
+2. Pick your repo → **Deploy** (settings come from `netlify.toml`)
+3. Add your Netlify URL to Firebase authorized domains (Part 1, step 2)
 
-Every `git push` auto-redeploys. On each phone: open the URL → **Add to Home Screen**.
+Every `git push` auto-redeploys. On phones: open the URL → **Add to Home Screen**.
 
 ---
 
-## 🔑 How login & family codes work
+## 👑 How families & permissions work
 
-1. First open → **Continue with Google** (no passwords, managed by Firebase)
-2. No family yet → **Create** (pick any code you like, e.g. `GADALA-7`) or **Join** with the family code
-3. Your login is remembered on that device forever — next time it opens straight to Home
-4. Family members join by entering your code — the code is just an invite token, all data access still requires a signed-in Google account
+```
+Creator / Owner 👑
+├── special permission ONLY: approve/reject join requests + remove members
+├── (otherwise a normal member)
+Member ──── normal access
+Member ──── normal access
+```
+
+1. First person picks a family name **and their own family code** (e.g. `GADALA-7`) when creating
+2. Others: sign in with Google → **Join** → enter the code → a **join request** is sent
+3. The **creator sees the request** on their Family page → **Accept** = instant access, **Reject** = locked out
+4. The creator can also **✕ remove** any member anytime — they lose access immediately and see
+   *"You were removed from the family by its creator"* on their device
+5. Multiple families supported — switch in the sidebar
+
+Access is enforced by **Firestore security rules** server-side — joining requires creator approval, and removed members are blocked at the database level, not just hidden in the UI.
+
+## 🔐 How the Document Safe works
+
+- Every file is **encrypted in your browser (AES-256-GCM)** before upload — Firebase only ever stores unreadable ciphertext
+- **Shared files**: encrypted with the family safe PIN — everyone in the family can open them
+- **🔒 Private files**: encrypted with **your personal PIN** (separate key, unique per user) and stored in a
+  per-user collection that **only you** can read — enforced by security rules. Other members never receive
+  them, not even as ciphertext
+- Max ~700 KB per file; photos are auto-compressed in-browser first
+
+## 💬 How chat encryption works
+
+Messages use **end-to-end encryption** (ECDH P-256 key exchange + AES-256-GCM). Each device generates a
+secret key that never leaves it; Firebase only ever stores ciphertext. Back up your key from the 🔑 button
+in the chat list to keep history readable on new devices.
 
 ## 🗄 Data model (Firestore)
 
 ```
-users/{uid}                          → name, email, photoURL, families: { CODE: true }
-families/{CODE}                      → name, code, createdBy
-families/{CODE}/members/{uid}        → name, photoURL, color, joinedAt
-families/{CODE}/todos/{id}           → text, assigneeId, dueDate, done
-families/{CODE}/lists/{id}           → name, emoji
-families/{CODE}/lists/{id}/items/{id}→ text, checked
-families/{CODE}/events/{id}          → title, date, time, memberId
+users/{uid}                              → profile, chat public key, families: { CODE: true }
+families/{CODE}                          → name, code, createdBy (the owner)
+families/{CODE}/members/{uid}            → member profiles (created ONLY on owner approval)
+families/{CODE}/joinRequests/{uid}       → pending join requests
+families/{CODE}/todos · lists(+items) · budget(+limits,+reminders) · meals · events · locations · chats/messages
+families/{CODE}/documents/{id}           → family-shared encrypted files
+families/{CODE}/privateDocs/{uid}/...    → per-user encrypted files (owner-only by rules)
 ```
 
 ## ❓ FAQ
 
-**Is Firebase free?** Yes — the Spark plan is free forever, plenty for a family.
+**Is Firebase really free?** Yes — Spark plan. A family app uses a tiny fraction of its limits.
+(No Firebase Storage needed — files live encrypted inside Firestore.)
 
-**Changed the old code-based app to this version?** Old test data (created before
-Google login) isn't linked to your account. Just create a fresh family — takes 10 seconds.
+**Removed member wants back in?** They just send a new join request — approve it and they're restored.
 
-**Multiple families?** Yes — create/join as many as you like and switch in the sidebar.
+**Someone forgot the safe PIN?** Shared files need the family PIN (whoever set it knows).
+Private files need that person's own PIN — there's no reset (that's what makes it private).
+
+**Change the app name?** Edit `<title>` in `index.html` and the wordmark in `App.jsx`.
