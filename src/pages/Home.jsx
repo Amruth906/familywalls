@@ -3,6 +3,13 @@ import { useApp } from "../store.jsx";
 import { useCollection } from "../useData.js";
 import { IconCheckSquare, IconCalendar, IconUsers, IconChevronRight } from "../components/Icons.jsx";
 
+const SLOTS = [
+  { id: "breakfast", label: "Breakfast", emoji: "☀️" },
+  { id: "lunch", label: "Lunch", emoji: "🍽️" },
+  { id: "dinner", label: "Dinner", emoji: "🌙" },
+  { id: "snacks", label: "Snacks", emoji: "🍪" },
+];
+
 function todayStr() {
   const t = new Date();
   return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
@@ -12,11 +19,14 @@ export default function Home({ goto }) {
   const { user, activeCode, members, me, familyName } = useApp();
   const { docs: todos } = useCollection(activeCode, "todos");
   const { docs: events } = useCollection(activeCode, "events");
+  const { docs: meals } = useCollection(activeCode, "meals");
 
   const today = todayStr();
   const myOpen = todos.filter((t) => !t.done && t.assigneeId === user.uid);
   const dueToday = myOpen.filter((t) => t.dueDate && t.dueDate <= today);
   const memberById = Object.fromEntries(members.map((m) => [m.id, m]));
+
+  const todaysMeals = meals.filter((m) => m.date === today);
 
   const upcoming = events
     .filter((e) => e.date >= today)
@@ -55,6 +65,28 @@ export default function Home({ goto }) {
           <span className="stat-label">Family members</span>
         </button>
       </div>
+
+      <section className="panel">
+        <header className="panel-head">
+          <h3>🍽️ Today's meals</h3>
+          <button className="linklike" onClick={() => goto("meals")}>
+            Plan week <IconChevronRight size={14} />
+          </button>
+        </header>
+        <div className="meal-widget">
+          {SLOTS.map((s) => {
+            const m = todaysMeals.find((x) => x.slot === s.id);
+            return (
+              <div key={s.id} className={"meal-slot" + (m ? " has" : "")}>
+                <span className="meal-slot-label">
+                  {s.emoji} {s.label}
+                </span>
+                <span className="meal-slot-title">{m ? m.title : "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="two-col">
         <section className="panel">
