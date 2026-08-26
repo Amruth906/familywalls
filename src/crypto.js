@@ -28,12 +28,23 @@ export async function decryptBuffer(key, buf) {
 }
 
 function b64(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(bin);
 }
 
-function unb64(s) {
-  return Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+function b64ToBuf(s) {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
+
+export { b64 as bufToB64, b64ToBuf };
 
 export async function makeVerifier(key) {
   return b64(await encryptBuffer(key, enc.encode("familyhub-docs-ok")));
@@ -41,7 +52,7 @@ export async function makeVerifier(key) {
 
 export async function checkVerifier(key, v64) {
   try {
-    const pt = await decryptBuffer(key, unb64(v64));
+    const pt = await decryptBuffer(key, b64ToBuf(v64));
     return new TextDecoder().decode(pt) === "familyhub-docs-ok";
   } catch {
     return false;

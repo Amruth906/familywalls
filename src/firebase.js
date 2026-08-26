@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { initializeFirestore, terminate, clearIndexedDbPersistence } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDwORr8j6cU3XeWMMYB2xiUCTRLhdSI3Qo",
@@ -20,7 +19,6 @@ const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {
   experimentalForceLongPolling: true,
 });
-export const storage = getStorage(app);
 
 export async function resetAppData() {
   try {

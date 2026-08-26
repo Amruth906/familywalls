@@ -1,13 +1,40 @@
 import React, { useMemo, useRef, useState } from "react";
 import { doc, getDoc, setDoc, addDoc, deleteDoc, updateDoc, arrayUnion } from "firebase/firestore";
-import { ref, uploadBytes, deleteObject } from "firebase/storage";
 import { useApp, famCol } from "../store.jsx";
-import { db, storage } from "../firebase.js";
+import { db } from "../firebase.js";
 import { useCollection } from "../useData.js";
-import { getDocKey, encryptBuffer, makeVerifier, checkVerifier } from "../crypto.js";
+import { getDocKey, encryptBuffer, makeVerifier, checkVerifier, bufToB64 } from "../crypto.js";
 import { openDocById } from "../docsUtils.js";
 import Avatar from "../components/Avatar.jsx";
-import { IconPlus, IconX, IconTrash, IconSearch } from "../components/Icons.jsx";
+import { IconPlus, IconX, IconTrash } from "../components/Icons.jsx";
+
+const MAX_BYTES = 700 * 1024;
+
+async function maybeCompress(file) {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  if (file.size < 350 * 1024) return file;
+  try {
+    const img = await createImageBitmap(file);
+    const max = 1600;
+    let { width, height } = img;
+    if (width > max || height > max) {
+      const r = Math.min(max / width, max / height);
+      width = Math.round(width * r);
+      height = Math.round(height * r);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.82));
+    if (blob && blob.size < file.size) {
+      return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+    }
+    return file;
+  } catch {
+    return file;
+  }
+}
 
 const FOLDER_EMOJIS = ["📁", "🪪", "🏥", "🎓", "🚗", "🏠", "💼", "🧾", "✈️", "🐾"];
 const FOLDER_COLORS = ["#ff6b4a", "#4f8cff", "#22b07d", "#9b59f6", "#f2b705", "#e84393", "#00b8d4"];
@@ -131,18 +158,23 @@ export default function Documents() {
     const files = [...fileList];
     if (!files.length) return;
     setUploading(files.length);
+    let failed = [];
     try {
       const key = await getDocKey(activeCode, pin);
       for (const file of files) {
-        const plain = await file.arrayBuffer();
+        const f = await maybeCompress(file);
+        if (f.size > MAX_BYTES) {
+          failed.push(`${file.name} (too big — max ~700 KB)`);
+          setUploading((n) => n - 1);
+          continue;
+        }
+        const plain = await f.arrayBuffer();
         const enc = await encryptBuffer(key, plain);
-        const path = `families/${activeCode}/docs/${crypto.randomUUID()}`;
-        await uploadBytes(ref(storage, path), enc, { contentType: "application/octet-stream" });
         await addDoc(famCol(activeCode, "documents"), {
-          name: file.name,
-          size: file.size,
-          mime: file.type || "",
-          path,
+          name: f.name,
+          size: f.size,
+          mime: f.type || "",
+          data: bufToB64(enc),
           folderId: activeFolder === "all" || activeFolder === "mine" ? null : activeFolder,
           isPrivate: isPrivate,
           createdBy: user.uid,
@@ -151,8 +183,12 @@ export default function Documents() {
         });
         setUploading((n) => n - 1);
       }
-      setMsg(isPrivate ? "✓ Uploaded privately (only you can see it)" : "✓ Uploaded & encrypted");
-      setTimeout(() => setMsg(""), 3000);
+      if (failed.length) {
+        setMsg("⚠️ Skipped: " + failed.join(", "));
+      } else {
+        setMsg(isPrivate ? "✓ Uploaded privately (only you can see it)" : "✓ Uploaded & encrypted");
+      }
+      setTimeout(() => setMsg(""), 4000);
     } catch (err) {
       setMsg("Upload failed: " + (err.message || "try again"));
       setUploading(0);
@@ -161,9 +197,6 @@ export default function Documents() {
 
   async function removeDoc(d) {
     if (!confirm(`Delete "${d.name}" permanently?`)) return;
-    try {
-      await deleteObject(ref(storage, d.path));
-    } catch {}
     await deleteDoc(doc(db, "families", activeCode, "documents", d.id));
   }
 
@@ -198,7 +231,7 @@ export default function Documents() {
           <p className="muted small">
             Files are <b>encrypted in your browser</b> with a secret PIN before upload — even Firebase can't
             read them. <b>Share the same PIN with your family</b> so everyone can open shared files. Private
-            files stay visible only to you.
+            files stay visible only to you. Max ~700 KB per file (photos are auto-compressed).
           </p>
           <input
             type="password"

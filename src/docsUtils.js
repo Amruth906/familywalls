@@ -1,7 +1,6 @@
 import { doc, getDoc } from "firebase/firestore";
-import { ref, getBytes } from "firebase/storage";
-import { db, storage } from "./firebase.js";
-import { getDocKey, decryptBuffer } from "./crypto.js";
+import { db } from "./firebase.js";
+import { getDocKey, decryptBuffer, b64ToBuf } from "./crypto.js";
 
 export function getSavedPin(code) {
   return localStorage.getItem(`fh_pin_${code}`);
@@ -15,8 +14,7 @@ export async function openDocById(code, docId, mode = "auto") {
     const pin = getSavedPin(code);
     if (!pin) return { needPin: true };
     const key = await getDocKey(code, pin);
-    const buf = await getBytes(ref(storage, meta.path));
-    const pt = await decryptBuffer(key, buf);
+    const pt = await decryptBuffer(key, b64ToBuf(meta.data));
     const mime = meta.mime || "application/octet-stream";
     const blob = new Blob([pt], { type: mime });
     const url = URL.createObjectURL(blob);
