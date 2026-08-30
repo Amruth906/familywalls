@@ -288,8 +288,10 @@ export function AppProvider({ children }) {
       throw new Error(friendly(e));
     }
     if (!snap.exists()) throw new Error("No family found with that code.");
-    if (snap.data().createdBy === user.uid)
-      throw new Error("That's your own family — open it from the sidebar.");
+    if (snap.data().createdBy === user.uid) {
+      setActiveCode(c);
+      return { alreadyMember: true };
+    }
     const memberSnap = await withTimeout(
       getDoc(doc(db, "families", c, "members", user.uid)),
       12000,
